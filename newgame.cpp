@@ -3,21 +3,15 @@
 #include <stdint.h>
 #include <vector>
 
+#include "geometry_m.h"
+#include "allocator.cpp"
+
 #define internal static
 #define local_persist static
 #define global_variable static
 
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
-struct win32_offscreen_buffer {
+struct win32_offscreen_buffer 
+{
     BITMAPINFO info;
     void *memory;
     int width;
@@ -27,7 +21,8 @@ struct win32_offscreen_buffer {
     int y_offset = 0; 
 };
 
-struct win32_window_dimensions {
+struct win32_window_dimensions 
+{
     int width;
     int height; 
 };
@@ -46,13 +41,17 @@ X_INPUT_SET_STATE(XInputSetStateStub) {
 }
 global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 
-// todo: global to be removed later.
-global_variable bool Running;
-global_variable win32_offscreen_buffer global_back_buffer;
 #define XInputGetState XInputGetState_
 #define XInputSetState XInputSetState_
 
-internal void Win32LoadXInput(void) {
+// todo: global to be removed later.
+global_variable bool Running;
+global_variable win32_offscreen_buffer global_back_buffer;
+
+global_variable Obj runtime_models;
+
+internal void Win32LoadXInput(void) 
+{
     HMODULE XInputLibrary = LoadLibrary("xinput1_3.dll");
     if (XInputLibrary) {
         XInputGetState = (x_input_get_state*)GetProcAddress(XInputLibrary, "XInputGetState");
@@ -60,7 +59,8 @@ internal void Win32LoadXInput(void) {
     }
 }
 
-internal win32_window_dimensions GetWindowDimension(HWND window) {
+internal win32_window_dimensions GetWindowDimension(HWND window) 
+{
     win32_window_dimensions result;
 
     RECT client_rect;
@@ -72,7 +72,8 @@ internal win32_window_dimensions GetWindowDimension(HWND window) {
     return(result);
 }
 
-internal void RenderWeirdGradient(win32_offscreen_buffer *buffer, int x_offset, int y_offset) {
+internal void RenderWeirdGradient(win32_offscreen_buffer *buffer, int x_offset, int y_offset) 
+{
     int width = buffer->width;
     int height = buffer->height;
 
@@ -100,7 +101,8 @@ internal void RenderWeirdGradient(win32_offscreen_buffer *buffer, int x_offset, 
 
 
 // note: callled on WM_SIZE.
-internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, LONG width, LONG height) {
+internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, LONG width, LONG height) 
+{
     if (buffer->memory) {
         VirtualFree(buffer->memory, 0, MEM_RELEASE);
     }
@@ -121,15 +123,15 @@ internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, LONG width, 
     RenderWeirdGradient(buffer, buffer->x_offset, buffer->y_offset);
 }
 
-internal std::vector<XINPUT_GAMEPAD> GetDeviceInputs() {
+internal std::vector<XINPUT_GAMEPAD> GetDeviceInputs() 
+{
     std::vector<XINPUT_GAMEPAD> inputs;
-    for (DWORD i = 0; i < XUSER_MAX_COUNT; i += 1) 
-    {
+    for (DWORD i = 0; i < XUSER_MAX_COUNT; i += 1) {
         XINPUT_STATE device_state;
 
         // Simply get the state of the controller from XInput.
         DWORD dwResult = XInputGetState(i, &device_state);
-        if(dwResult == ERROR_SUCCESS) {
+        if (dwResult == ERROR_SUCCESS) {
             // note: Controller is connected
             XINPUT_GAMEPAD pad = device_state.Gamepad;
 
@@ -142,38 +144,33 @@ internal std::vector<XINPUT_GAMEPAD> GetDeviceInputs() {
     return(inputs);
 }
 
-internal void ProcessInputs(win32_offscreen_buffer *buffer, std::vector<XINPUT_GAMEPAD> inputs) {
+internal void ProcessInputs(win32_offscreen_buffer *buffer, std::vector<XINPUT_GAMEPAD> inputs) 
+{
     for (int i = 0; i < inputs.size(); i += 1) {
         if (inputs.at(i).sThumbLX > 5000) {
-                buffer->x_offset += 1;
+            buffer->x_offset += 1;
         } else if (inputs.at(i).sThumbLX < -5000) {
-                buffer->x_offset += -1;
-        } else {
-                // buffer->x_offset = 0;
+            buffer->x_offset += -1;
+        } else  {
+            // buffer->x_offset = 0;
         }
 
         if (inputs.at(i).sThumbLY > 5000) {
-                buffer->y_offset += 1;
+            buffer->y_offset += 1;
         } else if (inputs.at(i).sThumbLY< -5000) {
-                buffer->y_offset += -1;
+            buffer->y_offset += -1;
         } else {
-                // buffer->y_offset = 0;
+            // buffer->y_offset = 0;
         }
     }
 }
 
 // note: callled on WM_PAINT.
 internal void Win32DisplayBufferInWindow(win32_offscreen_buffer *buffer, 
-        HDC DeviceContext, int X, int Y, int width, int height) {
-    //TODO: Aspect Ratio handling...
-    StretchDIBits(
-        DeviceContext,
-        0, 0, width, height,
-        0, 0, buffer->width, buffer->height,
-        buffer->memory,
-        &buffer->info,
-        DIB_RGB_COLORS,
-        SRCCOPY);
+        HDC DeviceContext, int X, int Y, int width, int height) 
+{
+    StretchDIBits(DeviceContext, 0, 0, width, height, 0, 0, buffer->width, buffer->height, buffer->memory, 
+            &buffer->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT Win32MainWindowCallback(
@@ -235,6 +232,7 @@ LRESULT Win32MainWindowCallback(
 //                 global_back_buffer.x_offset += -1;
 //             }
         } break;
+
         case WM_KEYUP:
         {
             u32 vk_code = WParam;
@@ -264,17 +262,30 @@ LRESULT Win32MainWindowCallback(
     return(Result);
 }
 
-void RenderModels() {
+void RenderModels(Obj* models) 
+{
+    /* Uncomment for models.
+     *
+     * TODO: Some table for storing allocated memory for models.
+     * WhatThingsAreInCamera()
+     * SendToGPU();
+    */
 
-                /* Uncomment for models.
-                 *
-                 * TODO: Some table for storing allocated memory for models.
-                 * WhatThingsAreInCamera()
-                 * SendToGPU();
-                */
+    // Downward, angled towards viewer to their left.
+    v3_float light = {};
+    light.x = -1;
+    light.y = -1;
+    light.z = 1;
+
+    // figure out where each model is in camera space.
+    
+    // calculate lighting to determine what each triangle should be colored as.
+    
+    // paint that imagery.
 }
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine, int nCmdShow) {
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine, int nCmdShow) 
+{
     WNDCLASSEXA WindowClass = {};
 
     Win32LoadXInput();
@@ -309,6 +320,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             Running = true;
             global_back_buffer.x_offset = 0;
             global_back_buffer.y_offset = 0;
+
+            // todo: develop loading schemes.
+            // Load models into memory. 
+            Obj* render_models;
+            Obj* cube = LoadOBJToMemory("cube.obj");                 
+            render_models = cube;
+
             while (Running == true) {
                 MSG Message;
                 while(PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
@@ -324,6 +342,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 std::vector<XINPUT_GAMEPAD> inputs = GetDeviceInputs();
                 ProcessInputs(&global_back_buffer, inputs);
 
+                // Get keyboard inputs.
+                // W.
                 if (GetAsyncKeyState(87) >= 0) {
                    global_back_buffer.y_offset += -1;
                 }
@@ -344,7 +364,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
 
                 RenderWeirdGradient(&global_back_buffer, global_back_buffer.x_offset, global_back_buffer.y_offset);
-                // RenderModels();
+
+                // todo: render the cube!
+                RenderModels(render_models);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
