@@ -277,7 +277,13 @@ void RenderModels(Obj* models)
     light.y = -1;
     light.z = 1;
 
-    // figure out where each model is in camera space.
+    // for each model.....
+    // for each triangle.....
+    // 1. if tri is in camera view, we need to render it. 
+    // 2. how far is it (x, y, and z) from camera? (this determines where on the screen it is, and how much space it 
+    //       takes up.
+    // 3. cross multiply tri with camera to determine the camera_view_shape of tri.
+    // 4. "shrink" size relative to z distance from camera.
     
     // calculate lighting to determine what each triangle should be colored as.
     
@@ -302,19 +308,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     ATOM atom = RegisterClassExA(&WindowClass);
     
     if (atom) {
-        HWND window = CreateWindowExA(
-            0,
-            WindowClass.lpszClassName,
-            "Newgame",
-            WS_OVERLAPPEDWINDOW|WS_VISIBLE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            0,
-            0,
-            instance,
-            0);
+        HWND window = CreateWindowExA(0, WindowClass.lpszClassName, "Newgame", WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
 
         if (window) {
             Running = true;

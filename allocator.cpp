@@ -51,14 +51,7 @@ void PlatformFreeFileMemory(void* memory)
 
 void* PlatformReadEntireFile(char* file_name) 
 {
-    HANDLE file_handle = CreateFileA(
-        file_name,
-        GENERIC_READ,
-        0,
-        0,
-        OPEN_EXISTING,
-        0,
-        0);
+    HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
 
     void *result = 0;
 
