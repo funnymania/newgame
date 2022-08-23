@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 
+
 #include "geometry_m.h"
+#include "file_io.h"
 
 struct MainThing {
     char* name;
@@ -49,23 +51,24 @@ void PlatformFreeFileMemory(void* memory)
     }
 }
 
-void* PlatformReadEntireFile(char* file_name) 
+void PlatformReadEntireFile(char* file_name, file_read_result* file_result) 
 {
     HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
 
-    void *result = 0;
+    file_result->data = 0;
 
     if (file_handle != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER file_size;
         if (GetFileSizeEx(file_handle, &file_size)) {
             // Assert(file_size.QuadPart <= 0xFFFFFFFF);
             u32 file_size_32 = (u32)file_size.QuadPart;
-            result = VirtualAlloc(0, file_size_32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE); 
-            if (result) {
-                if (ReadFile(file_handle, result, file_size_32, &bytes_read, 0) && file_size_32 == bytes_read) {
-
+            file_result->data = VirtualAlloc(0, file_size_32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE); 
+            if (file_result->data) {
+                if (ReadFile(file_handle, file_result->data, file_size_32, &bytes_read, 0) 
+                        && file_size_32 == bytes_read) {
+                    file_result->data_len = file_size_32;
                 } else {
-                    PlatformFreeFileMemory(result);
+                    PlatformFreeFileMemory(file_result->data);
                 }
             } else {
                 //todo: logs.
@@ -76,8 +79,6 @@ void* PlatformReadEntireFile(char* file_name)
 
         CloseHandle(file_handle);
     }
-
-    return(result);
 }
 
 struct char_size 
@@ -125,9 +126,11 @@ char_size ReadAlphaNumericUntilWhiteSpace(char* start)
 Obj* LoadOBJToMemory(char* file_name) 
 {
     Obj* new_model = (Obj*)malloc(sizeof(Obj));
-    void *mem = PlatformReadEntireFile(file_name);
-    if (mem) {
-        char* ptr = (char*)mem;
+    file_read_result mem = {};
+
+    PlatformReadEntireFile(file_name, &mem);
+    if (mem.data) {
+        char* ptr = (char*)mem.data;
         std::vector<v3_float> verts;
         std::vector<v3_float> uvs;
         std::vector<v3_float> normals;
@@ -288,15 +291,16 @@ Obj* LoadOBJToMemory(char* file_name)
                         int index = std::atoi(vert_ptr);
                         if (index != 0) {
                             if (vert_num_counter == 1) {
-                                if (counter == 1) {
-                                    tri.one = verts.at(index - 1); 
-                                }
-                                if (counter == 2) {
-                                    tri.two = verts.at(index - 1); 
-                                }
-                                if (counter == 3) {
-                                    tri.three = verts.at(index - 1); 
-                                }
+                                tri.verts[counter - 1] = verts.at(index - 1);
+                                // if (counter == 1) {
+                                //     tri.one = verts.at(index - 1); 
+                                // }
+                                // if (counter == 2) {
+                                //     tri.two = verts.at(index - 1); 
+                                // }
+                                // if (counter == 3) {
+                                //     tri.three = verts.at(index - 1); 
+                                // }
                             }
                             if (vert_num_counter == 2) {
                                 // todo: UV.
@@ -314,15 +318,16 @@ Obj* LoadOBJToMemory(char* file_name)
                     // If next character is a number, this is the third and final number.
                     int index = std::atoi(vert_ptr);
                     if (index != 0) {
-                        if (counter == 1) {
-                            tri.one_normal = normals.at(index - 1); 
-                        }
-                        if (counter == 2) {
-                            tri.two_normal = normals.at(index - 1); 
-                        }
-                        if (counter == 3) {
-                            tri.three_normal = normals.at(index - 1); 
-                        }
+                        tri.normals[counter - 1] = normals.at(index - 1);
+                        // if (counter == 1) {
+                        //     tri.one_normal = normals.at(index - 1); 
+                        // }
+                        // if (counter == 2) {
+                        //     tri.two_normal = normals.at(index - 1); 
+                        // }
+                        // if (counter == 3) {
+                        //     tri.three_normal = normals.at(index - 1); 
+                        // }
                     } 
 
                     ptr += num.size;
@@ -357,7 +362,8 @@ Obj* LoadOBJToMemory(char* file_name)
         }
 
         new_model->triangles = tris.data();
-        PlatformFreeFileMemory(mem);
+        new_model->triangles_len = tris.size();
+        PlatformFreeFileMemory(mem.data);
     }
 
     return(new_model);

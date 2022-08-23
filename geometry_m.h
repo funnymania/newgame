@@ -34,7 +34,7 @@ struct Transform
 {
     v3 pos;
     v3 rot;
-    v3 scale;
+    // v3 scale;
 };
 
 struct Ray 
@@ -52,18 +52,22 @@ struct Sausage
 
 struct Tri 
 {
-    v3_float one;
-    v3_float two;
-    v3_float three;
-    v3_float one_normal;
-    v3_float two_normal;
-    v3_float three_normal;
+    v3_float verts[3];
+    v3_float normals[3];
 };
 
 struct Obj 
 {
-    Tri* triangles;
+    Tri* triangles; // Vertice positions are OFFSETS from tra. A value of (1, 0, 0) is to the left of wherever tra is.
+    Transform tra;
     u64 triangles_len;
+};
+
+struct Camera 
+{
+    v3 pos;
+    v3 direction;    
+    float wideness;
 };
 
 #endif

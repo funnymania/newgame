@@ -5,6 +5,7 @@
 
 #include "geometry_m.h"
 #include "allocator.cpp"
+#include "audio.cpp"
 
 #define internal static
 #define local_persist static
@@ -25,6 +26,12 @@ struct win32_window_dimensions
 {
     int width;
     int height; 
+};
+
+struct RunningModels 
+{
+    Obj* models;
+    u64 models_len;
 };
 
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
@@ -48,7 +55,7 @@ global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 global_variable bool Running;
 global_variable win32_offscreen_buffer global_back_buffer;
 
-global_variable Obj runtime_models;
+global_variable RunningModels runtime_models;
 
 internal void Win32LoadXInput(void) 
 {
@@ -212,6 +219,7 @@ LRESULT Win32MainWindowCallback(
 
         case WM_KEYDOWN:
         {
+            OutputDebugStringA("WNDcallback\n");
             // W.
 //             if (GetKeyState(87) >= 0) {
 //                global_back_buffer.y_offset += -1;
@@ -262,15 +270,34 @@ LRESULT Win32MainWindowCallback(
     return(Result);
 }
 
-void RenderModels(Obj* models) 
+// note: assuming camera is at origin, with a direction vector positive in z, and wideness of 0.5.
+bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra)
 {
-    /* Uncomment for models.
-     *
-     * TODO: Some table for storing allocated memory for models.
-     * WhatThingsAreInCamera()
-     * SendToGPU();
-    */
+    for (int counter = 0; counter < 3; counter += 1) {
+        float distance = triangle->verts[counter].z + tra.pos.z - camera.pos.z;
+        float frustrum_extent = distance * camera.wideness; 
+        
+        // Vertex is behind camera.
+        if (distance < 0) {
+            continue;
+        }
 
+        float cam_range_x = 1.78 / 2;
+        float cam_range_y = 1 / 2;
+        if (triangle->verts[counter].x + tra.pos.x < frustrum_extent * (camera.pos.x + cam_range_x)
+            && triangle->verts[counter].x + tra.pos.x > frustrum_extent * (camera.pos.x - cam_range_x)
+            && triangle->verts[counter].y + tra.pos.y < frustrum_extent * (camera.pos.y + cam_range_y)
+            && triangle->verts[counter].y + tra.pos.y > frustrum_extent * (camera.pos.y - cam_range_y)
+        ) {
+           return(true); 
+        }
+    }
+
+    return(false);
+}
+
+void RenderModels(RunningModels* models, Camera camera) 
+{
     // Downward, angled towards viewer to their left.
     v3_float light = {};
     light.x = -1;
@@ -284,10 +311,34 @@ void RenderModels(Obj* models)
     //       takes up.
     // 3. cross multiply tri with camera to determine the camera_view_shape of tri.
     // 4. "shrink" size relative to z distance from camera.
+    Obj* model_ptr = models->models;
+    int counter = 0;
+    while (counter < models->models_len) {
+        Tri* triangle_ptr = model_ptr->triangles;
+        int tri_counter = 0;
+        while (tri_counter < model_ptr->triangles_len) {
+            // From camera "center", take a vertex and test if, give it's Z-distance from camera, it is within
+            // the rectangle that is the camera's "view" at that point!
+            // there will be a formula such that at every 1 unit distance from camera, frustrum expands x and y
+            // relative to aspect ratio. since our aspect ratio is 1280 by 720, this would mean... 
+            // for every Z unit, frustrum increases 1.78y and 1x.
+            if (IsTriangleInCamera(triangle_ptr, camera, model_ptr->tra)) {
+                // given distance from camera, compute "size" and placement on the screen of tri
+                // morph shape of tri given angle of camera and rotation of model containing tri. 
+            }
+
+            tri_counter += 1;
+            triangle_ptr += 1;
+        }
+
+        counter += 1;
+        model_ptr += 1;
+    } 
     
     // calculate lighting to determine what each triangle should be colored as.
     
     // paint that imagery.
+    // optionally send to GPU.
 }
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine, int nCmdShow) 
@@ -318,13 +369,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             // todo: develop loading schemes.
             // Load models into memory. 
-            Obj* render_models;
             Obj* cube = LoadOBJToMemory("cube.obj");                 
-            render_models = cube;
+            runtime_models.models = cube;
+            runtime_models.models_len += 1;
 
+            // move the cube.
+            cube->tra.pos = { 0, 0, 2 };
+
+            Camera camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
+
+            // Call into audio Client.
+            AudioClientActivate();
+            
             while (Running == true) {
                 MSG Message;
-                while(PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
+                while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
                     if (Message.message == WM_QUIT) {
                         Running = false;
                     }
@@ -333,12 +392,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     DispatchMessageA(&Message);
                 }
 
+                // Render audio.
+                RenderAudio();
+
                 // Get device inputs.
                 std::vector<XINPUT_GAMEPAD> inputs = GetDeviceInputs();
                 ProcessInputs(&global_back_buffer, inputs);
 
                 // Get keyboard inputs.
                 // W.
+                OutputDebugStringA("gmae loop\n");
                 if (GetAsyncKeyState(87) >= 0) {
                    global_back_buffer.y_offset += -1;
                 }
@@ -358,10 +421,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     global_back_buffer.x_offset += -1;
                 }
 
+                if (GetAsyncKeyState(VK_MENU) && GetAsyncKeyState(VK_F4)) {
+                   Running = false;
+                }
+
                 RenderWeirdGradient(&global_back_buffer, global_back_buffer.x_offset, global_back_buffer.y_offset);
 
                 // todo: render the cube!
-                RenderModels(render_models);
+                RenderModels(&runtime_models, camera);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
