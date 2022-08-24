@@ -356,6 +356,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     WindowClass.lpszClassName = "NewGameWindowClass";
     // HICON     hIconSm;
 
+    // Locked in value on OS boot, used for computing framerates.
+    LARGE_INTEGER perf_counter_frequency_result;
+    QueryPerformanceFrequency(&perf_counter_frequency_result);
+    i64 perf_counter_frequency = perf_counter_frequency_result.QuadPart;
+
     ATOM atom = RegisterClassExA(&WindowClass);
     
     if (atom) {
@@ -449,9 +454,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 }
             }
+
+            LARGE_INTEGER last_counter;
+            QueryPerformanceCounter(&last_counter);
+
+            i64 last_cycle_count = __rdtsc();
             
             bool all_sounds_stop = false;
             while (Running == true) {
+                // Counter for determining time passed, with granularity greater than a microsecond.
+                // This is relevant, as our game runs its update loop on the order of milliseconds.
+                LARGE_INTEGER begin_counter;
+                QueryPerformanceCounter(&begin_counter);
+
                 MSG Message;
                 while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
                     if (Message.message == WM_QUIT) {
@@ -463,8 +478,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
 
                 // Render audio.
-                if (static_audio.size() > 0 && all_sounds_stop == false) 
-                    PlayStaticAudio(&static_audio);
+                // if (static_audio.size() > 0 && all_sounds_stop == false) 
+                //     PlayStaticAudio(&static_audio);
                 
                 if (create_spatial_streams != 0) {
                     if (spatial_sounds_objects.size() > 0 && all_sounds_stop == false) {
@@ -481,7 +496,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 // Get keyboard inputs.
                 // W.
-                OutputDebugStringA("gmae loop\n");
                 if (GetAsyncKeyState(87) >= 0) {
                    global_back_buffer.y_offset += -1;
                 }
@@ -505,6 +519,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                    Running = false;
                 }
 
+                // perf: This is our bottleneck!
                 RenderWeirdGradient(&global_back_buffer, global_back_buffer.x_offset, global_back_buffer.y_offset);
 
                 // todo: render the cube!
@@ -520,8 +535,27 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                         client_rect.height);
 
                 ReleaseDC(window, device_context);
-            }
 
+                i64 end_cycle_count = __rdtsc();
+                
+                LARGE_INTEGER end_counter;
+                QueryPerformanceCounter(&end_counter);
+
+                i64 cycles_elapsed = end_cycle_count - last_cycle_count;
+                i64 counter_elapsed = end_counter.QuadPart - last_counter.QuadPart;
+                i64 ms_per_frame = 1000 * counter_elapsed / perf_counter_frequency;
+                i32 mz_per_frame = (i32)(cycles_elapsed / 1000 / 1000);
+
+                char buffer_test[256];
+
+                i64 frames_per_second = 1000 / ms_per_frame;
+                wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", ms_per_frame, 
+                        frames_per_second, mz_per_frame);
+                OutputDebugString(buffer_test);
+
+                last_counter = end_counter;
+                last_cycle_count = end_cycle_count;
+            }
         }
         else {
             //TODO: Logging...
