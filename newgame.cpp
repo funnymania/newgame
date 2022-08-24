@@ -363,6 +363,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
 
         if (window) {
+            HRESULT hr;
             Running = true;
             global_back_buffer.x_offset = 0;
             global_back_buffer.y_offset = 0;
@@ -378,9 +379,78 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             Camera camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
 
-            // Call into audio Client.
-            AudioClientActivate();
+            // Default static audio format.
+            WAVEFORMATEX format_24_48 = {};
+            format_24_48.wFormatTag = WAVE_FORMAT_PCM; 
+            format_24_48.nChannels = 2; 
+            format_24_48.nSamplesPerSec = 48000L; 
+            format_24_48.nAvgBytesPerSec = 288000L; 
+            format_24_48.nBlockAlign = 6; // channels * bits / 8
+            format_24_48.wBitsPerSample = 24; 
+            format_24_48.cbSize = 0;
+
+            // Default spatial audio format.
+            WAVEFORMATEX spatial_format = {};
+            spatial_format.wFormatTag = 3; 
+            spatial_format.nChannels = 1; 
+            spatial_format.nSamplesPerSec = 48000L; 
+            spatial_format.nAvgBytesPerSec = 192000L; 
+            spatial_format.nBlockAlign = 4; // channels * bits / 8
+            spatial_format.wBitsPerSample = 32; 
+            spatial_format.cbSize = 0;
+
+            // Start up Static and Spatial audio clients.
+            IAudioClient* static_client = InitStaticAudioClient(format_24_48); 
+            ISpatialAudioClient* spatial_audio_client = InitSpatialAudioClient();
+
+            // Determine if user has selected spatial sound.
+            UINT32 create_spatial_streams;
+            spatial_audio_client->GetMaxDynamicObjectCount(&create_spatial_streams);
+
+            // Containers for playing sounds.
+            // One SpatialAudioStream is sufficient for many spatial sounds.
+            std::vector<StaticAudioStream> static_audio;
+            SpatialAudioStream spatial_audio;
+
+            std::vector<AudioObj> spatial_sounds_objects;
+
+            // note: this is entirely user decided via their Audio Settings. If they do not have Windows Sonic set for
+            //       spatialized sound, this will always be 0. We cannot override that through code.
+            if (create_spatial_streams == 0) {
+                StaticAudioStream stream = SetupStaticAudioStream("Eerie_Town.wav", format_24_48, static_client);
+                hr = stream.audio_client->Start();
+                static_audio.push_back(stream);
+            } else {
+                spatial_audio = SetupSpatialAudioStream(spatial_format, spatial_audio_client, create_spatial_streams);
+
+                hr = spatial_audio.render_stream->Start();
+
+                PlaySpatialAudio(&spatial_audio, spatial_format, &spatial_sounds_objects);
+
+                // Activate a new dynamic audio object. 
+                // A stream can hold a max number of dynamic audio objects. 
+                ISpatialAudioObject* audioObject;
+                hr = spatial_audio.render_stream->ActivateSpatialAudioObject(AudioObjectType::AudioObjectType_Dynamic, 
+                        &audioObject);
+
+                // If SPTLAUDCLNT_E_NO_MORE_OBJECTS is returned, there are no more available objects
+                if (SUCCEEDED(hr)) {
+                    // Init new struct with the new audio object.
+                    AudioObj obj = {
+                        audioObject,
+                        { -100, 0, 0 },
+                        { 0.1, 0, 0 },
+                        0.2,
+                        3000, // Should be our song data...
+                        spatial_format.nSamplesPerSec * 5 // 5 seconds of audio samples
+                    };
+
+                    spatial_sounds_objects.insert(spatial_sounds_objects.begin(), obj);
+
+                }
+            }
             
+            bool all_sounds_stop = false;
             while (Running == true) {
                 MSG Message;
                 while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
@@ -393,7 +463,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
 
                 // Render audio.
-                RenderAudio();
+                if (static_audio.size() > 0 && all_sounds_stop == false) 
+                    PlayStaticAudio(&static_audio);
+                
+                if (create_spatial_streams != 0) {
+                    if (spatial_sounds_objects.size() > 0 && all_sounds_stop == false) {
+                        PlaySpatialAudio(&spatial_audio, spatial_format, &spatial_sounds_objects);
+                    } else {
+                        // Stop the stream 
+                        hr = spatial_audio.render_stream->Stop();
+                    }
+                }
 
                 // Get device inputs.
                 std::vector<XINPUT_GAMEPAD> inputs = GetDeviceInputs();
@@ -441,6 +521,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 ReleaseDC(window, device_context);
             }
+
         }
         else {
             //TODO: Logging...
@@ -449,6 +530,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     else {
         //TODO: Logging...
     }
+
+    // // Reset the stream to free it's resources.
+    // HRESULT hr_end = spatial_audio.render_stream->Reset();
+
+    // CloseHandle(spatial_audio.buffer_completion_event);
 
     return(0);
 }

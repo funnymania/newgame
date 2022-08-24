@@ -51,6 +51,7 @@ void PlatformFreeFileMemory(void* memory)
     }
 }
 
+// todo: Will return garbage if file is open by some other program.
 void PlatformReadEntireFile(char* file_name, file_read_result* file_result) 
 {
     HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);

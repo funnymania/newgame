@@ -23,11 +23,18 @@ struct v3
     u64 z;
 };
 
-struct v3_float 
+struct v3_float_64
 {
     f64 x;
     f64 y;
     f64 z;
+};
+
+struct v3_float 
+{
+    f32 x;
+    f32 y;
+    f32 z;
 };
 
 struct Transform 
