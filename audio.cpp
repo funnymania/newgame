@@ -323,10 +323,12 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
 
             // PAUSE
             case WAIT_OBJECT_0 + 1: {
+                sound->stream->audio_client->Stop();
                 sound->stream->paused = true;
             } break;
 
             case WAIT_OBJECT_0 + 2: {
+                sound->stream->audio_client->Start();
                 sound->stream->paused = false;
             } break;
         }

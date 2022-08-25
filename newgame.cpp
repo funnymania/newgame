@@ -155,17 +155,17 @@ internal void ProcessInputs(win32_offscreen_buffer *buffer, std::vector<XINPUT_G
 {
     for (int i = 0; i < inputs.size(); i += 1) {
         if (inputs.at(i).sThumbLX > 5000) {
-            buffer->x_offset += 1;
+            buffer->x_offset += 2;
         } else if (inputs.at(i).sThumbLX < -5000) {
-            buffer->x_offset += -1;
+            buffer->x_offset += -2;
         } else  {
             // buffer->x_offset = 0;
         }
 
         if (inputs.at(i).sThumbLY > 5000) {
-            buffer->y_offset += 1;
+            buffer->y_offset += 2;
         } else if (inputs.at(i).sThumbLY< -5000) {
-            buffer->y_offset += -1;
+            buffer->y_offset += -2;
         } else {
             // buffer->y_offset = 0;
         }
