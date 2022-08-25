@@ -1,3 +1,6 @@
+#ifndef AUDIO_CPP
+#define AUDIO_CPP
+
 #include <windows.h>
 #include <spatialaudioclient.h>
 #include <audioclient.h>
@@ -6,6 +9,8 @@
 // #include <combaseapi.h> // For ComPtr.
 
 #include "file_io.h"
+#include "audio.h"
+#include "asset_table.cpp"
 
 #define REFTIMES_PER_SEC 10000000
 #define REFTIMES_PER_MILLISEC 10000
@@ -13,6 +18,9 @@
 #define SAFE_RELEASE(punk)  \
               if ((punk) != NULL)  \
                 { (punk)->Release(); (punk) = NULL; }
+
+static void SetupStaticAudioStream(StaticSoundAsset* sound, WAVEFORMATEX format_24_48);
+static DWORD WINAPI PlayStaticAudio(LPVOID param);
 
 // Container that the sound goes in to. So, from some audio source, we will
 // be updating this container's frequency. 
@@ -26,17 +34,6 @@ struct AudioObj
     UINT totalFrameCount;
 };
 
-struct StaticAudioStream 
-{
-    IAudioClient* audio_client;
-    IAudioRenderClient* render_client;
-    REFERENCE_TIME buffer_duration;
-    u32 buffer_frame_count; 
-    BYTE* buffer;
-    u8* media_ptr;
-    i32 data_remaining;
-};
-
 struct SpatialAudioStream 
 {
     ISpatialAudioClient* client;
@@ -44,8 +41,143 @@ struct SpatialAudioStream
     HANDLE buffer_completion_event;
 };
 
+struct SoundPlayResult 
+{
+    u32 response;  // either 0 for error, or 1 for success.
+};
+
 static bool user_spatial_audio = true;
 static bool all_sounds_stop = false;
+
+static SoundAssetTable sound_assets;
+
+static IAudioClient* static_client;
+
+static WAVEFORMATEX default_static_format = {
+    WAVE_FORMAT_PCM,
+    2, 
+    48000L, 
+    288000L, 
+    6, // channels * bits / 8
+    24, 
+    0
+};
+
+static void CreateSoundTable()
+{
+    sound_assets = {};
+}
+
+// todo: Some kind of logging for if file reads crash.
+static void LoadSound(char* file_name)
+{
+    HRESULT hr;
+
+    StaticSoundAsset new_sound = {};
+    new_sound.name = file_name;
+
+    // Load file into memory. 
+    file_read_result media_data;
+    PlatformReadEntireFile(file_name, &media_data);
+
+    // todo: Skip bytes according to file type.
+    new_sound.media_ptr = (u8*)media_data.data + 44;
+
+    // Add to table.
+    // SoundAssetTable* ptr = Add(&sound_assets, new_sound);
+    sound_assets = *(Add(&sound_assets, new_sound));
+
+    StaticSoundAsset* sa = Get(&sound_assets, file_name);
+    sa->stream->data_remaining = media_data.data_len - 44;
+}
+
+static SoundPlayResult StartPlaying(char* name) 
+{
+    SoundPlayResult result = {};
+
+    // note: this is malloc'd, so we can use the pointer.
+    StaticSoundAsset* to_play = Get(&sound_assets, name);
+    
+    // Create the stream!
+    SetupStaticAudioStream(to_play, default_static_format);
+
+    // Hook up supported events required by game loop.
+    HANDLE wait_events[3];
+    for (int counter = 0; counter < 3; counter += 1) {
+        wait_events[counter] = CreateEvent(
+            0, 0, 0, 0
+        );
+
+        if (wait_events[counter] == NULL) 
+        { 
+            printf("CreateEvent error: %d\n", GetLastError() ); 
+            ExitProcess(0); 
+        } 
+    }
+    
+    to_play->stream->wait_events[0] = wait_events[0];
+    to_play->stream->wait_events[1] = wait_events[1];
+    to_play->stream->wait_events[2] = wait_events[2];
+
+    // Create/run the thread!
+    HANDLE stream_thread = CreateThread(0, 0, PlayStaticAudio, to_play, 0, &to_play->thread_id);
+
+    if (stream_thread == 0) {
+        // error!
+        OutputDebugString("Thread creation failed");
+        result.response = 0;
+    } else {
+        result.response = 1;
+    }
+
+    return(result);
+}
+
+static SoundPlayResult StopPlaying(char* name) 
+{
+    SoundPlayResult result = {};
+
+    StaticSoundAsset* asset = Get(&sound_assets, name);
+
+    if (asset == 0) {
+        result.response = 0;
+        return(result);
+    }
+
+    SetEvent(asset->stream->wait_events[0]);
+}
+
+static SoundPlayResult Pause(char* name) 
+{
+    SoundPlayResult result = {};
+    result.response = 1;
+
+    StaticSoundAsset* asset = Get(&sound_assets, name);
+
+    if (asset == 0) {
+        result.response = 0;
+        return(result);
+    }
+
+    SetEvent(asset->stream->wait_events[1]);
+    return(result);
+}
+
+static SoundPlayResult Unpause(char* name) 
+{
+    SoundPlayResult result = {};
+    result.response = 1;
+
+    StaticSoundAsset* asset = Get(&sound_assets, name);
+
+    if (asset == 0) {
+        result.response = 0;
+        return(result);
+    }
+
+    SetEvent(asset->stream->wait_events[2]);
+    return(result);
+}
 
 void WriteToAudioObjectBuffer(FLOAT* buffer, UINT frameCount, FLOAT frequency, UINT samplingRate)
 {
@@ -106,7 +238,7 @@ static ISpatialAudioClient* InitSpatialAudioClient()
 }
 
 // todo: each of these windows calls can return FAILED(hr), which should be taken care of somehow.
-static IAudioClient* InitStaticAudioClient(WAVEFORMATEX format_24_48) 
+static void InitStaticAudioClient(WAVEFORMATEX format_24_48) 
 {
     HRESULT hr;
 
@@ -128,100 +260,108 @@ static IAudioClient* InitStaticAudioClient(WAVEFORMATEX format_24_48)
     // SAFE_RELEASE(default_device)
     // SAFE_RELEASE(deviceEnum)
 
-    return(audio_client);
+    // return(audio_client);
+    static_client = audio_client;
 }
 
-static StaticAudioStream SetupStaticAudioStream(char* file_name, WAVEFORMATEX format_24_48, IAudioClient* audio_client) 
+static void SetupStaticAudioStream(StaticSoundAsset* sound, WAVEFORMATEX format_24_48) 
 {
     HRESULT hr;
-    StaticAudioStream result = {};
 
-    // Load file into memory. 
-    file_read_result media_data;
-    PlatformReadEntireFile(file_name, &media_data);
+    hr = static_client->GetBufferSize(&sound->stream->buffer_frame_count);
 
-    // Assuming this is a WAV file, we need to skip the first 44 bytes, which is the header of the file.
-    result.media_ptr = (u8*)media_data.data + 44;
-    result.data_remaining = media_data.data_len - 44;
-    
-    hr = audio_client->GetBufferSize(&result.buffer_frame_count);
-
-    hr = audio_client->GetService(__uuidof(IAudioRenderClient), (void**)&result.render_client);
+    hr = static_client->GetService(__uuidof(IAudioRenderClient), (void**)&sound->stream->render_client);
 
     // Grab the buffer for initial fill operation. The space for data has been allocated here.
-    hr = result.render_client->GetBuffer(result.buffer_frame_count, &result.buffer);
+    hr = sound->stream->render_client->GetBuffer(sound->stream->buffer_frame_count, &sound->stream->buffer);
 
     // Load buffer_frame_count amount of data from media_data to data shared buffer.
     // We are grabbing buffer_frame_count amount of 2 stereo channel * 24 bits... which is 6 bytes. 
     // u8* media_read_end = media_ptr + 6 * buffer_frame_count;
-    memcpy(result.buffer, result.media_ptr, result.buffer_frame_count * 6);
-    result.media_ptr += result.buffer_frame_count * 6;
-    result.data_remaining -= result.buffer_frame_count * 6;
+    memcpy(sound->stream->buffer, sound->media_ptr, sound->stream->buffer_frame_count * 6);
+    sound->media_ptr += sound->stream->buffer_frame_count * 6;
+    sound->stream->data_remaining -= sound->stream->buffer_frame_count * 6;
     
     // Release that buffer.
-    hr = result.render_client->ReleaseBuffer(result.buffer_frame_count, 0);
+    hr = sound->stream->render_client->ReleaseBuffer(sound->stream->buffer_frame_count, 0);
 
     // Calculate how long to sleep for....
-    result.buffer_duration = (double)REFTIMES_PER_SEC * result.buffer_frame_count / format_24_48.nSamplesPerSec;
+    sound->stream->buffer_duration = (double)REFTIMES_PER_SEC * sound->stream->buffer_frame_count / format_24_48.nSamplesPerSec;
 
-    result.audio_client = audio_client;
-
-    return(result);
+    sound->stream->audio_client = static_client;
+    sound->stream->paused = false;
 }
 
-    static u32 where_ptr_is = 48000 * 6;
-    static u32 where_player_is = 0;
-    static u32 where_ptr_should_be_next = 48000 * 6;
-
 // note: for sounds that are playing.
-static void PlayStaticAudio(std::vector<StaticAudioStream>* streams) 
+static DWORD WINAPI PlayStaticAudio(LPVOID param) 
 {
     HRESULT hr;
     int counter = 0;
-    std::vector<StaticAudioStream>::iterator it = std::begin((*streams));
+    StaticSoundAsset* sound = (StaticSoundAsset*) param;
 
-    while (it != std::end((*streams))) {
+    sound->stream->audio_client->Start();
+
+    while (true) {
         u32 padding_frames_count = 0;
         u32 used_frames = 0;
         
+        // todo: on receiving a request to stop, pause, or unpause, resume
         // Sleep for half of buffer duration. This means approx half of buffer's audio is unplayed at this point.
-        // todo: this will stall the ENTIRE thread, so we need to create different threads for each sound...
-        Sleep((DWORD)((*it).buffer_duration / REFTIMES_PER_MILLISEC / 2));
+        // HOWEVER, if
+        DWORD event_res = WaitForMultipleObjects(3, sound->stream->wait_events, FALSE,
+                (DWORD)(sound->stream->buffer_duration / REFTIMES_PER_MILLISEC / 2, true));
+        
+        switch (event_res) {
+            // Stop.
+            case WAIT_OBJECT_0 + 0: {
+                Sleep((DWORD)(sound->stream->buffer_duration / REFTIMES_PER_MILLISEC / 2));
+                sound->stream->audio_client->Stop();
+                SAFE_RELEASE(sound->stream->audio_client)
+                SAFE_RELEASE(sound->stream->render_client)
+                return(1);
+            } break;
 
-        // How much buffer space is available now?
-        hr = (*it).audio_client->GetCurrentPadding(&padding_frames_count);
+            // PAUSE
+            case WAIT_OBJECT_0 + 1: {
+                sound->stream->paused = true;
+            } break;
 
-        used_frames = (*it).buffer_frame_count - padding_frames_count;
-        where_player_is += used_frames;
-
-        // Get buffer..
-        hr = (*it).render_client->GetBuffer(used_frames, &(*it).buffer);
-
-        // study: might need to just use used_frames, as this might be == buffer_frame_count when we are out of
-        //        data.
-        (*it).data_remaining -= used_frames * 6;
-        if ((*it).data_remaining <= 0) {
-            hr = (*it).render_client->ReleaseBuffer(used_frames, 0);
-            Sleep((DWORD)((*it).buffer_duration / REFTIMES_PER_MILLISEC / 2));
-
-            // study: there may be a single audio client per stream, in which case, this would 
-            //        stop all static audio files at once.
-            hr = (*it).audio_client->Stop();
-            
-            SAFE_RELEASE((*streams).at(counter).audio_client)
-            SAFE_RELEASE((*streams).at(counter).render_client)
-            it = (*streams).erase(it);
-            continue;
+            case WAIT_OBJECT_0 + 2: {
+                sound->stream->paused = false;
+            } break;
         }
 
-        memcpy((*streams).at(counter).buffer, (*streams).at(counter).media_ptr, 
-                used_frames * 6);
+        if (sound->stream->paused == false) {
+            // How much buffer space is available now?
+            hr = sound->stream->audio_client->GetCurrentPadding(&padding_frames_count);
 
-        (*it).media_ptr += used_frames * 6;
+            used_frames = sound->stream->buffer_frame_count - padding_frames_count;
 
-        hr = (*streams).at(counter).render_client->ReleaseBuffer(used_frames, 0);
-        counter += 1;
-        it += 1;
+            // Get buffer..
+            hr = sound->stream->render_client->GetBuffer(used_frames, &sound->stream->buffer);
+
+            // study: might need to just use used_frames, as this might be == buffer_frame_count when we are out of
+            //        data.
+            sound->stream->data_remaining -= used_frames * 6;
+            if (sound->stream->data_remaining <= 0) {
+                hr = sound->stream->render_client->ReleaseBuffer(used_frames, 0);
+                Sleep((DWORD)(sound->stream->buffer_duration / REFTIMES_PER_MILLISEC / 2));
+
+                // study: there may be a single audio client per stream, in which case, this would 
+                //        stop all static audio files at once.
+                hr = sound->stream->audio_client->Stop();
+                
+                SAFE_RELEASE(sound->stream->audio_client)
+                SAFE_RELEASE(sound->stream->render_client)
+                return(1);
+            }
+
+            memcpy(sound->stream->buffer, sound->media_ptr, used_frames * 6);
+
+            sound->media_ptr += used_frames * 6;
+
+            hr = sound->stream->render_client->ReleaseBuffer(used_frames, 0);
+        }
     }
 }
 
@@ -486,3 +626,5 @@ static void RenderAudio()
 
     }
 }
+
+#endif

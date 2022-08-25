@@ -219,7 +219,7 @@ LRESULT Win32MainWindowCallback(
 
         case WM_KEYDOWN:
         {
-            OutputDebugStringA("WNDcallback\n");
+            // OutputDebugStringA("WNDcallback\n");
             // W.
 //             if (GetKeyState(87) >= 0) {
 //                global_back_buffer.y_offset += -1;
@@ -262,7 +262,6 @@ LRESULT Win32MainWindowCallback(
 
         default: 
         {
-            OutputDebugStringA("default\n");
             Result = DefWindowProc(Window, Message, WParam, LParam);
         } break;
     }
@@ -405,7 +404,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             spatial_format.cbSize = 0;
 
             // Start up Static and Spatial audio clients.
-            IAudioClient* static_client = InitStaticAudioClient(format_24_48); 
+            InitStaticAudioClient(format_24_48); 
             ISpatialAudioClient* spatial_audio_client = InitSpatialAudioClient();
 
             // Determine if user has selected spatial sound.
@@ -414,7 +413,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             // Containers for playing sounds.
             // One SpatialAudioStream is sufficient for many spatial sounds.
-            std::vector<StaticAudioStream> static_audio;
             SpatialAudioStream spatial_audio;
 
             std::vector<AudioObj> spatial_sounds_objects;
@@ -422,9 +420,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             // note: this is entirely user decided via their Audio Settings. If they do not have Windows Sonic set for
             //       spatialized sound, this will always be 0. We cannot override that through code.
             if (create_spatial_streams == 0) {
-                StaticAudioStream stream = SetupStaticAudioStream("Eerie_Town.wav", format_24_48, static_client);
-                hr = stream.audio_client->Start();
-                static_audio.push_back(stream);
+                // StaticAudioStream stream = SetupStaticAudioStream("", format_24_48, static_client);
+                // hr = stream.audio_client->Start();
             } else {
                 spatial_audio = SetupSpatialAudioStream(spatial_format, spatial_audio_client, create_spatial_streams);
 
@@ -459,6 +456,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             QueryPerformanceCounter(&last_counter);
 
             i64 last_cycle_count = __rdtsc();
+
+            // need a few things
+            // StartPlaying(audio)
+            // StopAllAudio()
+            // StopPlaying(audio)
+
+            CreateSoundTable();
+            LoadSound("Eerie_Town.wav");
+            StartPlaying("Eerie_Town.wav");
             
             bool all_sounds_stop = false;
             while (Running == true) {
@@ -477,10 +483,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     DispatchMessageA(&Message);
                 }
 
-                // Render audio.
-                // if (static_audio.size() > 0 && all_sounds_stop == false) 
-                //     PlayStaticAudio(&static_audio);
-                
                 if (create_spatial_streams != 0) {
                     if (spatial_sounds_objects.size() > 0 && all_sounds_stop == false) {
                         PlaySpatialAudio(&spatial_audio, spatial_format, &spatial_sounds_objects);
@@ -496,23 +498,26 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 // Get keyboard inputs.
                 // W.
-                if (GetAsyncKeyState(87) >= 0) {
-                   global_back_buffer.y_offset += -1;
+                if (GetAsyncKeyState(87) & 0x01) {
+                   global_back_buffer.y_offset += -2;
+                   Pause("Eerie_Town.wav");
                 }
 
                 // A.
-                if (GetAsyncKeyState(65) >= 0) {
-                    global_back_buffer.x_offset += 1;
+                if (GetAsyncKeyState(65) & 0x01) {
+                    global_back_buffer.x_offset += 2;
+                    Unpause("Eerie_Town.wav");
                 }
 
                 // S.
-                if (GetAsyncKeyState(83) >= 0) {
-                    global_back_buffer.y_offset += 1;
+                if (GetAsyncKeyState(83) & 0x01) {
+                    global_back_buffer.y_offset += 2;
+                    // StopPlaying("Eerie_Town.wav");
                 }
 
                 // D.
-                if (GetAsyncKeyState(68) >= 0) {
-                    global_back_buffer.x_offset += -1;
+                if (GetAsyncKeyState(68) & 0x01) {
+                    global_back_buffer.x_offset += -2;
                 }
 
                 if (GetAsyncKeyState(VK_MENU) && GetAsyncKeyState(VK_F4)) {
