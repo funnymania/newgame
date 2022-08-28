@@ -11,6 +11,7 @@
 #include "file_io.h"
 #include "audio.h"
 #include "asset_table.cpp"
+#include "util.h"
 
 #define REFTIMES_PER_SEC 10000000
 #define REFTIMES_PER_MILLISEC 10000
@@ -88,6 +89,7 @@ static void LoadSound(char* file_name)
     sound_assets = *(Add(&sound_assets, new_sound));
 
     StaticSoundAsset* sa = Get(&sound_assets, file_name);
+    sa->stream->file_size = media_data.data_len;
     sa->stream->data_remaining = media_data.data_len - 44;
 }
 
@@ -102,8 +104,8 @@ static SoundPlayResult StartPlaying(char* name)
     SetupStaticAudioStream(to_play, default_static_format);
 
     // Hook up supported events required by game loop.
-    HANDLE wait_events[3];
-    for (int counter = 0; counter < 3; counter += 1) {
+    HANDLE wait_events[4];
+    for (int counter = 0; counter < 4; counter += 1) {
         wait_events[counter] = CreateEvent(
             0, 0, 0, 0
         );
@@ -118,6 +120,7 @@ static SoundPlayResult StartPlaying(char* name)
     to_play->stream->wait_events[0] = wait_events[0];
     to_play->stream->wait_events[1] = wait_events[1];
     to_play->stream->wait_events[2] = wait_events[2];
+    to_play->stream->wait_events[3] = wait_events[3];
 
     // Create/run the thread!
     HANDLE stream_thread = CreateThread(0, 0, PlayStaticAudio, to_play, 0, &to_play->thread_id);
@@ -160,6 +163,22 @@ static SoundPlayResult Pause(char* name)
     }
 
     SetEvent(asset->stream->wait_events[1]);
+    return(result);
+}
+
+static SoundPlayResult Reverse(char* name) 
+{
+    SoundPlayResult result = {};
+    result.response = 1;
+
+    StaticSoundAsset* asset = Get(&sound_assets, name);
+
+    if (asset == 0) {
+        result.response = 0;
+        return(result);
+    }
+
+    SetEvent(asset->stream->wait_events[3]);
     return(result);
 }
 
@@ -301,6 +320,9 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
 
     sound->stream->audio_client->Start();
 
+    bool play_in_reverse = false;
+    bool play_in_reverse_first = true;
+
     while (true) {
         u32 padding_frames_count = 0;
         u32 used_frames = 0;
@@ -308,7 +330,7 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
         // todo: on receiving a request to stop, pause, or unpause, resume
         // Sleep for half of buffer duration. This means approx half of buffer's audio is unplayed at this point.
         // HOWEVER, if
-        DWORD event_res = WaitForMultipleObjects(3, sound->stream->wait_events, FALSE,
+        DWORD event_res = WaitForMultipleObjects(4, sound->stream->wait_events, FALSE,
                 (DWORD)(sound->stream->buffer_duration / REFTIMES_PER_MILLISEC / 2, true));
         
         switch (event_res) {
@@ -331,7 +353,22 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
                 sound->stream->audio_client->Start();
                 sound->stream->paused = false;
             } break;
+
+            // play in reverse
+            case WAIT_OBJECT_0 + 3: {
+                //  sound->stream->audio_client->Start();
+                //  sound->stream->paused = false;
+                play_in_reverse = !play_in_reverse;
+            } break;
         }
+
+        // note: Tests for reverse_memcpy.
+        // char test4[5] = "bleh";
+        // // char* test4 = &test; // this works
+
+        // char* test2 = "bananafish";
+        // char* test3 = test2 + 9;
+        // reverse_memcpy(test4, test3, 4);
 
         if (sound->stream->paused == false) {
             // How much buffer space is available now?
@@ -344,8 +381,13 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
 
             // study: might need to just use used_frames, as this might be == buffer_frame_count when we are out of
             //        data.
-            sound->stream->data_remaining -= used_frames * 6;
-            if (sound->stream->data_remaining <= 0) {
+            if (play_in_reverse) {
+                sound->stream->data_remaining += used_frames * 6;
+            } else {
+                sound->stream->data_remaining -= used_frames * 6;
+            }
+
+            if (sound->stream->data_remaining <= 0 || sound->stream->data_remaining >= sound->stream->file_size) {
                 hr = sound->stream->render_client->ReleaseBuffer(used_frames, 0);
                 Sleep((DWORD)(sound->stream->buffer_duration / REFTIMES_PER_MILLISEC / 2));
 
@@ -358,9 +400,25 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
                 return(1);
             }
 
-            memcpy(sound->stream->buffer, sound->media_ptr, used_frames * 6);
+            if (play_in_reverse) {
+                if (play_in_reverse_first == true) {
+                    u8* reverse_ptr = sound->stream->buffer + used_frames;
+                    reverse_memcpy(reverse_ptr, sound->media_ptr, padding_frames_count * 6);
+                    sound->media_ptr -= padding_frames_count * 6;
 
-            sound->media_ptr += used_frames * 6;
+                    u32 back_frames = used_frames - padding_frames_count;
+                    reverse_memcpy(sound->stream->buffer, sound->media_ptr, used_frames * 6);
+                    play_in_reverse_first = false;
+                } else {
+                    reverse_memcpy(sound->stream->buffer, sound->media_ptr, used_frames * 6);
+                    sound->media_ptr -= used_frames * 6;
+                }
+            } else {
+                memcpy(sound->stream->buffer, sound->media_ptr, used_frames * 6);
+
+                sound->media_ptr += used_frames * 6;
+            }
+
 
             hr = sound->stream->render_client->ReleaseBuffer(used_frames, 0);
         }
