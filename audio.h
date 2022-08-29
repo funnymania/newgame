@@ -3,6 +3,7 @@
 
 struct StaticAudioStream 
 {
+    char name[32];
     IAudioClient* audio_client;
     IAudioRenderClient* render_client;
     REFERENCE_TIME buffer_duration;
@@ -13,6 +14,7 @@ struct StaticAudioStream
     u32 action;
     u32 file_size;
     i32 data_remaining;
+    u8* media_ptr;
 };
 
 #endif

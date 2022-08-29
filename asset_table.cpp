@@ -1,28 +1,13 @@
 #include "audio.h"
+#include "newgame.h"
 
-// Represents a single file.
-struct StaticSoundAsset {
-    char* name;
-    StaticAudioStream* stream; 
-    DWORD thread_id;
-    StaticSoundAsset* next;
-    u8* media_ptr;
-};
-
-// todo: should be a lookup table, not linked list.
-// implement as an array (or, learn about cpp stuff?)
-struct SoundAssetTable {
-    StaticSoundAsset value;
-    SoundAssetTable* next;
-};
-
-static SoundAssetTable* Add(SoundAssetTable* table, StaticSoundAsset asset)
+static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset)
 {
     // move to end.
     // add to end.
     SoundAssetTable* current = table;
-    if (current->value.name == 0) {
-        asset.stream = (struct StaticAudioStream*)malloc(sizeof(struct StaticAudioStream));
+    if (current->value.name[0] == 0) {
+        // asset.name = (char*) malloc(32);
         current->value = asset;
         current->next = 0;
         return(table);
@@ -30,7 +15,8 @@ static SoundAssetTable* Add(SoundAssetTable* table, StaticSoundAsset asset)
 
     while (current->value.name != 0) {
         if (current->next == 0) {
-            asset.stream = (struct StaticAudioStream*)malloc(sizeof(struct StaticAudioStream));
+            // asset.stream = (struct StaticAudioStream*)malloc(sizeof(struct StaticAudioStream));
+            // asset.name = (char*) malloc(32);
 
             current->next = (struct SoundAssetTable*)malloc(sizeof(struct SoundAssetTable));
             current->next->value = asset;
@@ -44,7 +30,7 @@ static SoundAssetTable* Add(SoundAssetTable* table, StaticSoundAsset asset)
     // return(table);
 }
 
-static StaticSoundAsset* Get(SoundAssetTable* table, char* name) 
+static AudioAsset* Get(SoundAssetTable* table, char* name) 
 {
     SoundAssetTable* current = table;
     while (current->value.name != 0) {

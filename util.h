@@ -1,6 +1,78 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+static void ParseWavHeader(u8* data, AudioAsset* result) 
+{
+    u8* scan = data;
+    
+    // scan until 'fmt'.
+    while(true) {
+        if (*scan == 'f' && *(scan + 1) == 'm' && *(scan + 2) == 't') {
+            // scan += 8;
+            break;
+        }
+
+        scan += 1;
+    }
+
+        scan += 1;
+        scan += 1;
+        scan += 1;
+        scan += 1;
+        scan += 1;
+        scan += 1;
+        scan += 1;
+        scan += 1;
+
+        // format tag is next 2 bytes.
+        scan += 1;
+        scan += 1;
+
+
+    // note: All of these fields are represented as little endian.
+    u32 tmp = 0;
+
+    // next 2 bytes are channels
+    result->channels += *scan;
+    scan += 1;
+
+    tmp = *scan << 8;
+    result->channels += tmp;
+    scan += 1;
+
+
+    // after four bytes are sample rate
+    result->sample_rate += *scan;
+    scan += 1;
+
+    tmp = *scan << 8;
+    result->sample_rate += tmp;
+    scan += 1;
+
+    tmp = *scan << 16;
+    result->sample_rate += tmp;
+    scan +=1;
+
+    tmp = *scan << 24;
+    result->sample_rate += tmp;
+    scan += 1;
+
+    // after four bytes are avgbitrate.
+    // after two bytes are the alignment
+    
+    scan += 6;
+
+    // after four bytes are the bit.
+    u32 bits;
+
+    result->bits += *scan;
+    scan += 1;
+
+    tmp = *scan << 8;
+    result->bits += tmp;
+    scan += 1;
+}
+
 std::string FromCString(char* c_string) {
     std::string res;
     u8* ptr = nullptr;

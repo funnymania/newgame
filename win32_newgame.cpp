@@ -6,7 +6,7 @@
 #include "geometry_m.h"
 #include "newgame.h"
 #include "allocator.cpp"
-#include "audio.cpp"
+#include "win32_audio.cpp"
 
 #include "newgame.cpp"
 
@@ -359,7 +359,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             Camera camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
 
-            // Default static audio format.
+            // 24/48.
             WAVEFORMATEX format_24_48 = {};
             format_24_48.wFormatTag = WAVE_FORMAT_PCM; 
             format_24_48.nChannels = 2; 
@@ -369,7 +369,27 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             format_24_48.wBitsPerSample = 24; 
             format_24_48.cbSize = 0;
 
-            // Default spatial audio format.
+            // 24/96.
+            WAVEFORMATEX format_24_96 = {};
+            format_24_96.wFormatTag = WAVE_FORMAT_PCM; 
+            format_24_96.nChannels = 2; 
+            format_24_96.nSamplesPerSec = 96000; 
+            format_24_96.nAvgBytesPerSec = 576000L; 
+            format_24_96.nBlockAlign = 6; // channels * bits / 8
+            format_24_96.wBitsPerSample = 24; 
+            format_24_96.cbSize = 0;
+
+            // 16/44.
+            WAVEFORMATEX format_16_44 = {};
+            format_16_44.wFormatTag = WAVE_FORMAT_PCM; 
+            format_16_44.nChannels = 2; 
+            format_16_44.nSamplesPerSec = 44100; 
+            format_16_44.nAvgBytesPerSec = 176400; format_16_44.nBlockAlign = 4; // channels * bits / 8
+            format_16_44.nBlockAlign = 4; // channels * bits / 8
+            format_16_44.wBitsPerSample = 16; 
+            format_16_44.cbSize = 0;
+
+            // Default spatial audio format (as concerns mcClure's Grado headphones at least).
             WAVEFORMATEX spatial_format = {};
             spatial_format.wFormatTag = 3; 
             spatial_format.nChannels = 1; 
@@ -381,6 +401,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             // Start up Static and Spatial audio clients.
             InitStaticAudioClient(format_24_48); 
+            InitStaticAudioClient(format_16_44); 
+            InitStaticAudioClient(format_24_96); 
             ISpatialAudioClient* spatial_audio_client = InitSpatialAudioClient();
 
             // Determine if user has selected spatial sound.
@@ -437,9 +459,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             // StopAllAudio()
             // StopPlaying(audio)
 
-            CreateSoundTable();
-            LoadSound("Eerie_Town.wav");
-            StartPlaying("Eerie_Town.wav");
+            InitGame();
+            // LoadSound("Eerie_Town.wav");
+            // StartPlaying("Eerie_Town.wav");
             
             bool all_sounds_stop = false;
 
@@ -478,13 +500,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 if (GetAsyncKeyState(87) & 0x01) {
                     buffer.y_offset += -2;
                     // Pause("Eerie_Town.wav");
-                    Reverse("Eerie_Town.wav");
+                    // Reverse("Eerie_Town.wav");
                 }
 
                 // A.
                 if (GetAsyncKeyState(65) & 0x01) {
                     buffer.x_offset += 2;
-                    Unpause("Eerie_Town.wav");
+                    // Unpause("Eerie_Town.wav");
                 }
 
                 // S.
