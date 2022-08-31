@@ -16,6 +16,12 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 
+struct v2_i64
+{
+    i64 x;
+    i64 y;
+};
+
 struct v3 
 {
     u64 x;

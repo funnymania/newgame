@@ -9,6 +9,15 @@ static u32 running_sounds_len = 0;
 
 static SoundAssetTable sound_assets = {};
 
+// note: we should probably support local multiplayer.
+// XINPUT just creates 4 off the bat, and that is its MAX also.
+// Then there is keyboards, and who knows what else.
+static Input final_inputs[MAX_DEVICES];
+static AngelInputArray angel_inputs = {};
+
+static RunningModels runtime_models;
+static Camera camera;
+
 static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y_offset) 
 {
     int width = buffer->width;
@@ -39,9 +48,63 @@ static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y
 static void InitGame() 
 {
     // CreateSoundTable();
+    camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
 }
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer)
+static void AssignInput(std::vector<AngelInput> inputs) 
+{
+    for (int i = angel_inputs.open_index; i < inputs.size(); i += 1) {
+        AngelInput new_angel = inputs.at(i);
+        angel_inputs.inputs[i] = new_angel; // This is copy semantics! So this is a thing that RUST can improve upon.
+        angel_inputs.open_index += 1;
+
+        // If this were Rust:
+        // AngelInput new_angel = inputs.at(i);
+        // angel_inputs[i] = AngelInput { ..new_angel }; // This is EXPLICIT. It is NOT a reference, it is a new 
+        //                                                //     struct.
+        // We CAN accomplish as we did above in c++, IF we derive or implement our own support on the AngelInput struct
+        //       specifically FOR copy semantics.
+
+        // Default values for final_input.
+        Input new_in;
+        new_in.lr = &angel_inputs.inputs[i].lr;
+        new_in.z = &angel_inputs.inputs[i].z;
+        new_in.interact_mask = 8;
+        final_inputs[i] = new_in;
+    }
+}
+
+static void ConfigScreen() 
+{
+    // move around.... interact with an input field.
+    // toggle some button/stick. 
+    //       whatever I see positive input from, this is what is being pointed to by that field.
+    //       Ex. select move left-right field, use the Dpad, I will assign the memory address there
+    //           to be what is used for moving left-right for you.
+    // option to reset to default.
+}
+
+
+static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs) 
+{
+    for (int i = 0; i < angel_inputs.open_index; i += 1) { 
+        angel_inputs.inputs[i].lr = inputs[i].lr;
+        angel_inputs.inputs[i].z = inputs[i].z;
+        angel_inputs.inputs[i].keys = inputs[i].keys;
+
+        buffer->x_offset += 2 * final_inputs[i].lr->x / 32768;
+        buffer->y_offset += 2 * final_inputs[i].lr->y / 32768;
+
+        int interact_down = angel_inputs.inputs[i].keys & final_inputs[i].interact_mask;
+        if (interact_down == final_inputs[i].interact_mask) {
+            // Switch left and right control stick. 
+            final_inputs[i].lr = &angel_inputs.inputs[i].z;
+            final_inputs[i].z = &angel_inputs.inputs[i].lr;
+        }
+    }
+}
+
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
 {
     // study: should perhaps be running more often than renderer.
     // OutputSound();
@@ -57,7 +120,12 @@ static void GameUpdateAndRender(GameOffscreenBuffer* buffer)
         running_sounds_len += 1;
     } 
 
+    AssignInput(inputs);
+    ProcessInputs(buffer, inputs);
     RenderWeirdGradient(buffer, buffer->x_offset, buffer->y_offset);
+    
+    // todo: render the cube!
+    RenderModels(&runtime_models, camera);
 }
 
 enum AudioCode 

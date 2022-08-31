@@ -3,12 +3,13 @@
 #include <stdint.h>
 #include <vector>
 
-#include "geometry_m.h"
-#include "newgame.h"
 #include "allocator.cpp"
 #include "win32_audio.cpp"
 
 #include "newgame.cpp"
+#include "newgame.h"
+#include "renderer.cpp"
+#include "geometry_m.h"
 
 #define internal static
 #define local_persist static
@@ -31,12 +32,6 @@ struct win32_window_dimensions
     int height; 
 };
 
-struct RunningModels 
-{
-    Obj* models;
-    u64 models_len;
-};
-
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
 typedef X_INPUT_GET_STATE(x_input_get_state);
 X_INPUT_GET_STATE(XInputGetStateStub) {
@@ -57,8 +52,6 @@ global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 // todo: global to be removed later.
 global_variable bool Running;
 global_variable GameOffscreenBuffer buffer;
-
-global_variable RunningModels runtime_models;
 
 internal void Win32LoadXInput(void) 
 {
@@ -106,45 +99,89 @@ internal void Win32ResizeDIBSection(GameOffscreenBuffer *buffer, LONG width, LON
     RenderWeirdGradient(buffer, buffer->x_offset, buffer->y_offset);
 }
 
-internal std::vector<XINPUT_GAMEPAD> GetDeviceInputs() 
+// perf: memory churn from clears.
+internal void GetDeviceInputs(std::vector<AngelInput>* result) 
 {
+    result->clear();
     std::vector<XINPUT_GAMEPAD> inputs;
     for (DWORD i = 0; i < XUSER_MAX_COUNT; i += 1) {
         XINPUT_STATE device_state;
+        AngelInput angelic = {};
 
-        // Simply get the state of the controller from XInput.
         DWORD dwResult = XInputGetState(i, &device_state);
         if (dwResult == ERROR_SUCCESS) {
+            // Simply get the state of the controller from XInput.
             // note: Controller is connected
             XINPUT_GAMEPAD pad = device_state.Gamepad;
 
-            inputs.push_back(pad);
+            // All I care about are the default (control sticks, WASD).
+            // But this can be overwritten by the user, and then whatever the USER says is all I care about
+            // henceforth. 
+            // This user preference should be written to file. 
+            // Default should just be here in the executable.
+
+            // LR/FB
+            if (pad.sThumbLX > STICK_DEADSPACE || pad.sThumbLX < STICK_DEADSPACE * -1) {
+                angelic.lr.x = pad.sThumbLX;
+            } else {
+                angelic.lr.x = 0;
+            }
+
+            if (pad.sThumbLY > STICK_DEADSPACE || pad.sThumbLY < STICK_DEADSPACE * -1) {
+                angelic.lr.y = pad.sThumbLY;
+            } else {
+                angelic.lr.y = 0;
+            }
+
+            // Z
+            if (pad.sThumbRX > STICK_DEADSPACE || pad.sThumbRX < STICK_DEADSPACE * -1) {
+                angelic.z.x = pad.sThumbRX;
+            } else {
+                angelic.z.x = 0;
+            }
+            if (pad.sThumbRY > STICK_DEADSPACE || pad.sThumbRY < STICK_DEADSPACE * -1) {
+                angelic.z.y = pad.sThumbRY;
+            } else {
+                angelic.z.y = 0;
+            }
+
+            angelic.buttons = pad.wButtons;
         } else {
             // Controller is not connected
         }
-    }
 
-    return(inputs);
-}
-
-internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<XINPUT_GAMEPAD> inputs) 
-{
-    for (int i = 0; i < inputs.size(); i += 1) {
-        if (inputs.at(i).sThumbLX > 5000) {
-            buffer->x_offset += 2;
-        } else if (inputs.at(i).sThumbLX < -5000) {
-            buffer->x_offset += -2;
-        } else  {
-            // buffer->x_offset = 0;
+        // Get keyboard inputs.
+        // W.
+        if (GetAsyncKeyState(87) & 0x01) {
+            // buffer.y_offset += -2;
+            // Pause("Eerie_Town.wav");
+            // Reverse("Eerie_Town.wav");
+            angelic.keys ^= KEY_W;
         }
 
-        if (inputs.at(i).sThumbLY > 5000) {
-            buffer->y_offset += 2;
-        } else if (inputs.at(i).sThumbLY< -5000) {
-            buffer->y_offset += -2;
-        } else {
-            // buffer->y_offset = 0;
+        // A.
+        if (GetAsyncKeyState(65) & 0x01) {
+            // buffer.x_offset += 2;
+            // Unpause("Eerie_Town.wav");
         }
+
+        // S.
+        if (GetAsyncKeyState(83) & 0x01) {
+            // buffer.y_offset += 2;
+            // StopPlaying("Eerie_Town.wav");
+        }
+
+        // D.
+        if (GetAsyncKeyState(68) & 0x01) {
+            // buffer.x_offset += -2;
+        }
+
+        // Alt + F4
+        if (GetAsyncKeyState(VK_MENU) && GetAsyncKeyState(VK_F4)) {
+           Running = false;
+        }
+
+        result->push_back(angelic);
     }
 }
 
@@ -164,13 +201,12 @@ LRESULT Win32MainWindowCallback(
 ) {
     LRESULT Result = 0;
 
-    //TODO: Render when User is moving window.
+    //note: Not rendering when User is moving window
     switch(Message) {
         case WM_SIZE: 
         {
             win32_window_dimensions dimensions = GetWindowDimension(Window);
             Win32ResizeDIBSection(&buffer, dimensions.width, dimensions.height);
-            // TODO: Render things HERE. 
         } break;
 
         case WM_DESTROY: 
@@ -219,7 +255,6 @@ LRESULT Win32MainWindowCallback(
 
         case WM_KEYUP:
         {
-            u32 vk_code = WParam;
         } break;
 
         case WM_PAINT: 
@@ -243,77 +278,6 @@ LRESULT Win32MainWindowCallback(
     }
 
     return(Result);
-}
-
-// note: assuming camera is at origin, with a direction vector positive in z, and wideness of 0.5.
-bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra)
-{
-    for (int counter = 0; counter < 3; counter += 1) {
-        float distance = triangle->verts[counter].z + tra.pos.z - camera.pos.z;
-        float frustrum_extent = distance * camera.wideness; 
-        
-        // Vertex is behind camera.
-        if (distance < 0) {
-            continue;
-        }
-
-        float cam_range_x = 1.78 / 2;
-        float cam_range_y = 1 / 2;
-        if (triangle->verts[counter].x + tra.pos.x < frustrum_extent * (camera.pos.x + cam_range_x)
-            && triangle->verts[counter].x + tra.pos.x > frustrum_extent * (camera.pos.x - cam_range_x)
-            && triangle->verts[counter].y + tra.pos.y < frustrum_extent * (camera.pos.y + cam_range_y)
-            && triangle->verts[counter].y + tra.pos.y > frustrum_extent * (camera.pos.y - cam_range_y)
-        ) {
-           return(true); 
-        }
-    }
-
-    return(false);
-}
-
-void RenderModels(RunningModels* models, Camera camera) 
-{
-    // Downward, angled towards viewer to their left.
-    v3_float light = {};
-    light.x = -1;
-    light.y = -1;
-    light.z = 1;
-
-    // for each model.....
-    // for each triangle.....
-    // 1. if tri is in camera view, we need to render it. 
-    // 2. how far is it (x, y, and z) from camera? (this determines where on the screen it is, and how much space it 
-    //       takes up.
-    // 3. cross multiply tri with camera to determine the camera_view_shape of tri.
-    // 4. "shrink" size relative to z distance from camera.
-    Obj* model_ptr = models->models;
-    int counter = 0;
-    while (counter < models->models_len) {
-        Tri* triangle_ptr = model_ptr->triangles;
-        int tri_counter = 0;
-        while (tri_counter < model_ptr->triangles_len) {
-            // From camera "center", take a vertex and test if, give it's Z-distance from camera, it is within
-            // the rectangle that is the camera's "view" at that point!
-            // there will be a formula such that at every 1 unit distance from camera, frustrum expands x and y
-            // relative to aspect ratio. since our aspect ratio is 1280 by 720, this would mean... 
-            // for every Z unit, frustrum increases 1.78y and 1x.
-            if (IsTriangleInCamera(triangle_ptr, camera, model_ptr->tra)) {
-                // given distance from camera, compute "size" and placement on the screen of tri
-                // morph shape of tri given angle of camera and rotation of model containing tri. 
-            }
-
-            tri_counter += 1;
-            triangle_ptr += 1;
-        }
-
-        counter += 1;
-        model_ptr += 1;
-    } 
-    
-    // calculate lighting to determine what each triangle should be colored as.
-    
-    // paint that imagery.
-    // optionally send to GPU.
 }
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine, int nCmdShow) 
@@ -356,8 +320,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             // move the cube.
             cube->tra.pos = { 0, 0, 2 };
-
-            Camera camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
 
             // 24/48.
             WAVEFORMATEX format_24_48 = {};
@@ -454,19 +416,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             i64 last_cycle_count = __rdtsc();
 
-            // need a few things
-            // StartPlaying(audio)
-            // StopAllAudio()
-            // StopPlaying(audio)
-
             InitGame();
-            // LoadSound("Eerie_Town.wav");
-            // StartPlaying("Eerie_Town.wav");
+
+            std::vector<AngelInput> inputs;
             
             bool all_sounds_stop = false;
 
-            // GAME LOOP.
             while (Running == true) {
+                // GAME LOOP.
                 // Counter for determining time passed, with granularity greater than a microsecond.
                 // This is relevant, as our game runs its update loop on the order of milliseconds.
                 LARGE_INTEGER begin_counter;
@@ -492,43 +449,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
 
                 // Get device inputs.
-                std::vector<XINPUT_GAMEPAD> inputs = GetDeviceInputs();
-                ProcessInputs(&buffer, inputs);
+                GetDeviceInputs(&inputs);
 
-                // Get keyboard inputs.
-                // W.
-                if (GetAsyncKeyState(87) & 0x01) {
-                    buffer.y_offset += -2;
-                    // Pause("Eerie_Town.wav");
-                    // Reverse("Eerie_Town.wav");
-                }
-
-                // A.
-                if (GetAsyncKeyState(65) & 0x01) {
-                    buffer.x_offset += 2;
-                    // Unpause("Eerie_Town.wav");
-                }
-
-                // S.
-                if (GetAsyncKeyState(83) & 0x01) {
-                    buffer.y_offset += 2;
-                    // StopPlaying("Eerie_Town.wav");
-                }
-
-                // D.
-                if (GetAsyncKeyState(68) & 0x01) {
-                    buffer.x_offset += -2;
-                }
-
-                if (GetAsyncKeyState(VK_MENU) && GetAsyncKeyState(VK_F4)) {
-                   Running = false;
-                }
-
-                // perf: This is our bottleneck!
-                GameUpdateAndRender(&buffer);
-                
-                // todo: render the cube!
-                RenderModels(&runtime_models, camera);
+                GameUpdateAndRender(&buffer, inputs);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
