@@ -21,7 +21,7 @@
               if ((punk) != NULL)  \
                 { (punk)->Release(); (punk) = NULL; }
 
-static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound);
+static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound, GameMemory* game_memory);
 static DWORD WINAPI PlayStaticAudio(LPVOID param);
 
 // Container that the sound goes in to. So, from some audio source, we will
@@ -65,7 +65,7 @@ static WAVEFORMATEX default_static_format = {
 
 
 // todo: Some kind of logging for if file reads crash.
-static void LoadSound(char* file_name, SoundAssetTable** sound_assets)
+static void LoadSound(char* file_name, SoundAssetTable** sound_assets, GameMemory* game_memory)
 {
     HRESULT hr;
 
@@ -74,7 +74,7 @@ static void LoadSound(char* file_name, SoundAssetTable** sound_assets)
 
     // Load file into memory. 
     file_read_result media_data;
-    PlatformReadEntireFile(file_name, &media_data);
+    PlatformReadEntireFile(file_name, &media_data, game_memory);
 
     // todo: parse sample_rate, bits and channels from header data.
     // Assume, as far as audio is concerned, we only accept .WAV.
@@ -90,8 +90,7 @@ static void LoadSound(char* file_name, SoundAssetTable** sound_assets)
     // Add to table.
     // SoundAssetTable* ptr = Add(&sound_assets, new_sound);
 
-    // study: does this really work?
-    *sound_assets = Add(*sound_assets, new_sound);
+    *sound_assets = Add(*sound_assets, new_sound, game_memory);
 
     AudioAsset* aa = Get(*sound_assets, file_name);
     aa->audio_data_size = media_data.data_len;
@@ -124,7 +123,7 @@ static StaticAudioStream* Find(char* name)
     return(0);
 }
 
-static SoundPlayResult StartPlaying(char* name, SoundAssetTable* sound_assets)
+static SoundPlayResult StartPlaying(char* name, SoundAssetTable* sound_assets, GameMemory* game_memory)
 {
     SoundPlayResult result = {};
 
@@ -132,7 +131,7 @@ static SoundPlayResult StartPlaying(char* name, SoundAssetTable* sound_assets)
     AudioAsset* to_play = Get(sound_assets, name);
     
     // Create the stream!
-    StaticAudioStream stream = SetupStaticAudioStream(to_play);
+    StaticAudioStream stream = SetupStaticAudioStream(to_play, game_memory);
 
     // Hook up supported events required by game loop.
     HANDLE wait_events[4];
@@ -342,9 +341,7 @@ static void InitStaticAudioClient(WAVEFORMATEX format)
     AssignAudioClient(format, audio_client);
 }
 
-
-
-static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound) 
+static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound, GameMemory* game_memory) 
 {
     HRESULT hr;
     IAudioClient* audio_client;
@@ -372,13 +369,14 @@ static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound)
 
     // Grab the buffer for initial fill operation. The space for data has been allocated here.
     hr = stream.render_client->GetBuffer(stream.buffer_frame_count, &stream.buffer);
+    game_memory->permanent_storage_remaining -= stream.buffer_frame_count * sound->bytes_per_frame;
 
     // Load buffer_frame_count amount of data from media_data to data shared buffer.
     // We are grabbing buffer_frame_count amount of 2 stereo channel * 24 bits... which is 6 bytes. 
     // u8* media_read_end = media_ptr + 6 * buffer_frame_count;
-    memcpy(stream.buffer, stream.media_ptr, stream.buffer_frame_count * 6);
-    stream.media_ptr += stream.buffer_frame_count * 6;
-    stream.data_remaining -= stream.buffer_frame_count * 6;
+    memcpy(stream.buffer, stream.media_ptr, stream.buffer_frame_count * sound->bytes_per_frame);
+    stream.media_ptr += stream.buffer_frame_count * sound->bytes_per_frame;
+    stream.data_remaining -= stream.buffer_frame_count * sound->bytes_per_frame;
     
     // Release that buffer.
     hr = stream.render_client->ReleaseBuffer(stream.buffer_frame_count, 0);
@@ -392,6 +390,16 @@ static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound)
     return(stream);
 }
 
+// stud: if we had our own event system, all we would need from Windows for Audio Playing for Static Audio, is:
+//          1. StartPlaying -> stream->audio_client->Start();   // for Start(), Unpause()
+//          2. StopPlaying -> stream->audio_client->Stop();     // for Stop(), Pause()
+//          3. GetBuffer ->                                     // To write audio data to.
+//              hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+//              used_frames = stream->buffer_frame_count - padding_frames_count;
+//              hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+//          4. ReleaseBuffer ->                                 // To Give that space back to OS.
+//              hr = stream->render_client->ReleaseBuffer(used_frames, 0); 
+//       For now, all of this is being handled in Windows, which is why all the audio playing code is here.
 // note: for sounds that are playing.
 static DWORD WINAPI PlayStaticAudio(LPVOID param) 
 {
@@ -408,9 +416,8 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
         u32 padding_frames_count = 0;
         u32 used_frames = 0;
         
-        // todo: on receiving a request to stop, pause, or unpause, resume
         // Sleep for half of buffer duration. This means approx half of buffer's audio is unplayed at this point.
-        // HOWEVER, if
+        // Wakes upon Stop(), Pause(), etc.
         DWORD event_res = WaitForMultipleObjects(4, stream->wait_events, FALSE,
                 (DWORD)(stream->buffer_duration / REFTIMES_PER_MILLISEC / 2, true));
         
@@ -443,14 +450,6 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
                 play_in_reverse = !play_in_reverse;
             } break;
         }
-
-        // note: Tests for reverse_memcpy.
-        // char test4[5] = "bleh";
-        // // char* test4 = &test; // this works
-
-        // char* test2 = "bananafish";
-        // char* test3 = test2 + 9;
-        // reverse_memcpy(test4, test3, 4);
 
         if (stream->paused == false) {
             // How much buffer space is available now?
@@ -516,7 +515,6 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
 
                 stream->media_ptr += used_frames * 6;
             }
-
 
             // todo: non-windowsy WAIT for some message.
             hr = stream->render_client->ReleaseBuffer(used_frames, 0);

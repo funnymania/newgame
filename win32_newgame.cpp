@@ -8,7 +8,6 @@
 
 #include "newgame.cpp"
 #include "newgame.h"
-#include "renderer.cpp"
 #include "geometry_m.h"
 
 #define internal static
@@ -312,15 +311,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             buffer.x_offset = 0;
             buffer.y_offset = 0;
 
-            // todo: develop loading schemes.
-            // Load models into memory. 
-            Obj* cube = LoadOBJToMemory("cube.obj");                 
-            runtime_models.models = cube;
-            runtime_models.models_len += 1;
-
-            // move the cube.
-            cube->tra.pos = { 0, 0, 2 };
-
             // 24/48.
             WAVEFORMATEX format_24_48 = {};
             format_24_48.wFormatTag = WAVE_FORMAT_PCM; 
@@ -416,7 +406,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             i64 last_cycle_count = __rdtsc();
 
-            InitGame();
+#if NEWGAME_INTERNAL
+            LPVOID base_address = (LPVOID)Terabytes((u64)2);
+#else
+            LPVOID base_address = 0;
+#endif
+            GameMemory game_memory = {};
+            game_memory.permanent_storage_size = Megabytes(64);
+            game_memory.transient_storage_size = Gigabytes((u64)4);
+
+            u64 total_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
+
+            game_memory.permanent_storage = VirtualAlloc(base_address, total_size, MEM_COMMIT|MEM_RESERVE,
+                    PAGE_READWRITE);
+            game_memory.transient_storage = (u8*)game_memory.permanent_storage + game_memory.permanent_storage_size;
+
+            game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
+            game_memory.transient_storage_remaining = game_memory.transient_storage_size;
+
+            Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
             std::vector<AngelInput> inputs;
             
@@ -451,7 +459,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 // Get device inputs.
                 GetDeviceInputs(&inputs);
 
-                GameUpdateAndRender(&buffer, inputs);
+                GameUpdateAndRender(&game_memory, &buffer, inputs);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);

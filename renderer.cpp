@@ -26,7 +26,7 @@ bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra)
     return(false);
 }
 
-void RenderModels(RunningModels* models, Camera camera) 
+void RenderModels(Obj* models, Camera camera) 
 {
     // Downward, angled towards viewer to their left.
     v3_float light = {};

@@ -1,7 +1,7 @@
 #include "newgame.h"
 #include "asset_table.cpp"
+#include "area.cpp"
 
-// perf: should be a growable array, somewhat like Java's implementation.
 // static AudioAsset loaded_sounds[10];
 // static u32 loaded_sounds_len = 0;
 // static AudioAsset* running_sounds[10];
@@ -10,13 +10,14 @@ static u32 running_sounds_len = 0;
 static SoundAssetTable sound_assets = {};
 
 // note: we should probably support local multiplayer.
-// XINPUT just creates 4 off the bat, and that is its MAX also.
-// Then there is keyboards, and who knows what else.
 static Input final_inputs[MAX_DEVICES];
 static AngelInputArray angel_inputs = {};
+static GameMemory game_memory = {};
 
-static RunningModels runtime_models;
+// static RunningModels runtime_models;
 static Camera camera;
+
+static Area current_area;
 
 static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y_offset) 
 {
@@ -49,6 +50,10 @@ static void InitGame()
 {
     // CreateSoundTable();
     camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
+    game_memory.transient_storage_remaining -= sizeof(camera);
+
+    current_area = LoadArea("Place", &game_memory);
+    
 }
 
 static void AssignInput(std::vector<AngelInput> inputs) 
@@ -104,18 +109,24 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
     }
 }
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
+static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
 {
+    if (game_memory.initialized == false) {
+        game_memory = *memory; // copy.
+        InitGame();
+        game_memory.initialized = true;
+    }
+
     // study: should perhaps be running more often than renderer.
     // OutputSound();
 
     // study: always be given a buffer for each supported audio type. 
     if (running_sounds_len == 0) {
         SoundAssetTable* sound_ptr = &sound_assets;
-        LoadSound("Eerie_Town.wav", &sound_ptr); // Points our SoundAssetTable to the new head.
+        LoadSound("Eerie_Town.wav", &sound_ptr, &game_memory); // Points our SoundAssetTable to the new head.
         
         // AudioMessage play_sound = { PLAY, audio };
-        StartPlaying("Eerie_Town.wav", &sound_assets);
+        StartPlaying("Eerie_Town.wav", &sound_assets, &game_memory);
 
         running_sounds_len += 1;
     } 
@@ -125,7 +136,7 @@ static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelIn
     RenderWeirdGradient(buffer, buffer->x_offset, buffer->y_offset);
     
     // todo: render the cube!
-    RenderModels(&runtime_models, camera);
+    // RenderModels(&current_area.models, camera);
 }
 
 enum AudioCode 
@@ -149,6 +160,7 @@ struct AudioMessageQueue
 
 static AudioMessageQueue audio_queue = {};
 
+// note: reserved for multi-threaded independence.
 // note: (Windows) streams must match formats supported by device at least by channel number and sample rate.
 // shipping: devices may disconnect or be in exclusive mode, requiring fallbacks and potentially notifications
 //           for the user.
@@ -205,10 +217,3 @@ static void ReceivedAudioBuffer(AudioAsset* audio)
 {
      
 }
-
-// AudioClient... 
-//      Being able to Play a song.
-//      Being able to stop playing a song
-//      To pause a song
-//      I care about a song being in reverse
-//      I might also be interested in the speed of a song.

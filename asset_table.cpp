@@ -1,7 +1,7 @@
 #include "audio.h"
 #include "newgame.h"
 
-static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset)
+static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset, GameMemory* game_memory)
 {
     // move to end.
     // add to end.
@@ -19,6 +19,7 @@ static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset)
             // asset.name = (char*) malloc(32);
 
             current->next = (struct SoundAssetTable*)malloc(sizeof(struct SoundAssetTable));
+            game_memory->permanent_storage_remaining -= sizeof(struct SoundAssetTable);
             current->next->value = asset;
             current->next->next = 0;
             return(table);

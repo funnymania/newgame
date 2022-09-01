@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-
 #include "geometry_m.h"
+#include "newgame.h"
 #include "file_io.h"
 
 struct MainThing {
@@ -52,7 +52,7 @@ void PlatformFreeFileMemory(void* memory)
 }
 
 // todo: Will return garbage if file is open by some other program.
-void PlatformReadEntireFile(char* file_name, file_read_result* file_result) 
+void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory) 
 {
     HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
 
@@ -68,6 +68,7 @@ void PlatformReadEntireFile(char* file_name, file_read_result* file_result)
                 if (ReadFile(file_handle, file_result->data, file_size_32, &bytes_read, 0) 
                         && file_size_32 == bytes_read) {
                     file_result->data_len = file_size_32;
+                    game_memory->permanent_storage_remaining -= file_size_32;
                 } else {
                     PlatformFreeFileMemory(file_result->data);
                 }
@@ -124,12 +125,12 @@ char_size ReadAlphaNumericUntilWhiteSpace(char* start)
 
 // note: Triangle vertices are represented by 1-indexed (not 0-indexed) numbers, which correspond to the line
 //       in the file in which they occur.
-Obj* LoadOBJToMemory(char* file_name) 
+Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
 {
     Obj* new_model = (Obj*)malloc(sizeof(Obj));
     file_read_result mem = {};
 
-    PlatformReadEntireFile(file_name, &mem);
+    PlatformReadEntireFile(file_name, &mem, game_memory);
     if (mem.data) {
         char* ptr = (char*)mem.data;
         std::vector<v3_float> verts;

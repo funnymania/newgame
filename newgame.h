@@ -1,7 +1,33 @@
 #ifndef NEWGAME_H
 #define NEWGAME_H
 
+// note: NEWGAME_INTERNAL 0 - Public release. 1 - Developers.
+//       NEWGAME_SLOW 0 - No slow code allowed. 1- slow code welcome.
+#if NEWGAME_SLOW
+#define Assert(Expression) \
+    if(!(Expression)) {*(int*)0 = 0;}
+#else
+#define Assert(Expression)
+#endif
+
+#define Kilobytes(Value) (Value * 1024)
+#define Megabytes(Value) (Kilobytes(Value * 1024))
+#define Gigabytes(Value) (Megabytes(Value * 1024))
+#define Terabytes(Value) (Gigabytes(Value * 1024))
+#define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+
 #define MAX_DEVICES 64
+
+struct GameMemory 
+{
+    void* permanent_storage;
+    void* transient_storage;
+    u64 permanent_storage_size;
+    u64 transient_storage_size;
+    u64 permanent_storage_remaining;
+    u64 transient_storage_remaining;
+    bool initialized;
+};
 
 // note: services that the game provides to the platform layer.
 
@@ -57,13 +83,12 @@ struct SoundAssetTable {
     SoundAssetTable* next;
 };
 
-static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset);
+static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset, GameMemory* game_memory);
 static AudioAsset* Get(SoundAssetTable* table, char* name);
 
 void LoadSound(char* file_name);
 SoundPlayResult StartPlaying(char* name);
 
-void GameUpdateAndRender(GameOffscreenBuffer* buffer);
 
 // INPUT.
 struct Input
@@ -86,7 +111,7 @@ struct AngelInput
 struct AngelInputArray 
 {
     AngelInput inputs[MAX_DEVICES];
-    u32 open_index;
+    u32 open_index; // either an index never assigned, or in a full array of inputs, the most recently cleared index.
 };
 
 // Gamepads.
@@ -106,6 +131,7 @@ struct AngelInputArray
 // Computer Keyboard.
 #define KEY_W 8
 
+static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs);
 
 // WE DONT CARE.
 // On some user config screen. Get device input tags. Receive events on new device connected? it would only be 
@@ -153,12 +179,7 @@ struct AngelInputArray
 void SoundOutput();
 
 // RENDERING.
-struct RunningModels 
-{
-    Obj* models;
-    u64 models_len;
-};
-void RenderModels(RunningModels* models, Camera camera);
+void RenderModels(Obj* models, Camera camera);
 bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra);
 
 static void CreateSoundTable();
