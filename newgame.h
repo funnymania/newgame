@@ -2,7 +2,7 @@
 #define NEWGAME_H
 
 // note: NEWGAME_INTERNAL 0 - Public release. 1 - Developers.
-//       NEWGAME_SLOW 0 - No slow code allowed. 1- slow code welcome.
+//       NEWGAME_SLOW 0 - No slow code allowed. 1 - slow code welcome.
 #if NEWGAME_SLOW
 #define Assert(Expression) \
     if(!(Expression)) {*(int*)0 = 0;}
@@ -26,12 +26,98 @@ struct GameMemory
     u64 transient_storage_size;
     u64 permanent_storage_remaining;
     u64 transient_storage_remaining;
+    u64* next_available;
     bool initialized;
 };
 
-// note: services that the game provides to the platform layer.
+struct Pair_u16 
+{
+    u16 one;
+    u16 other;
+};
 
-// Timer, Device input, bitmap buffer to use, sound buffer to use.
+// List of 2-arrays
+struct Sequence_f32 
+{
+    f64* arr;
+    u64 size;
+
+    Sequence_f32() {}
+
+    Sequence_f32(f32 array[][2], int arr_size, GameMemory* game_memory) 
+    {
+        arr = (f64*)game_memory->next_available;
+
+        f64* seek = arr;
+        // init arr for arr_size.
+        for (int counter = 0; counter < arr_size; counter += 1) {
+            for (int counter2 = 0; counter2 < 2; counter2 += 1) {
+                *seek = (f64)array[counter][counter2];
+                game_memory->permanent_storage_remaining -= 8;
+                game_memory->next_available += 8;
+                seek += 1;
+            }
+        }
+
+        size = arr_size;
+    }
+};
+
+struct DoubleInterpolatedPattern
+{
+    f32 value[60];    // where '60' is frames (aka time)
+    f32 value_2[60];  // where '60' is frames (aka time)
+    u16 current_time; // starts at 0, ends at '60'
+                      
+    DoubleInterpolatedPattern() {}
+
+    // note: sequence must always specific a starting and ending value.
+    static DoubleInterpolatedPattern Create(Sequence_f32 sequence, Sequence_f32 sequence2) 
+    {
+        DoubleInterpolatedPattern result = {};
+
+        // init to -1.
+        for (int i = 0; i < 60; i += 1) {
+            result.value[i] = -1;
+            result.value_2[i] = -1;
+        }
+
+        // Compute the full values.
+        for (int i = 0; i < sequence.size - 1; i += 1) {
+            int current_value = (&sequence.arr[2*i])[0];
+            int next_value = (&sequence.arr[2 * (i + 1)])[0];
+
+            int current_time = (&sequence.arr[2*i])[1];
+            int next_time = (&sequence.arr[2 * (i + 1)])[1];
+            
+            for (int j = current_time; j < next_time; j += 1) {
+                result.value[j] = 
+                    current_value + ((next_value - current_value) / (next_time - current_time) * (j - current_time));
+            }
+
+            result.value[next_time] = (&sequence.arr[2 * (i + 1)])[0];
+        }
+
+        for (int i = 0; i < sequence2.size - 1; i += 1) {
+            int current_time = (&sequence2.arr[2*i])[1];
+            int next_time = (&sequence2.arr[2 * (i + 1)])[1];
+
+            int current_value = (&sequence2.arr[2*i])[0];
+            int next_value = (&sequence2.arr[2*(i + 1)])[0];
+            
+            for (int j = current_time; j < next_time; j += 1) {
+                result.value_2[j] = 
+                    current_value + ((next_value - current_value) / (next_time - current_time) * (j - current_time));
+            }
+
+            result.value_2[next_time] = (&sequence2.arr[2*(i + 1)])[0];
+        }
+
+        return(result);
+    }
+};
+
+// note: services that the game provides to the platform layer.
 struct GameOffscreenBuffer
 {
     BITMAPINFO info;
@@ -67,6 +153,7 @@ struct SoundPlayResult
     u32 response;  // either 0 for error, or 1 for success.
 };
 
+// DEPRECATED.
 // Represents a single file.
 // struct StaticSoundAsset {
 //     char* name;
@@ -76,8 +163,7 @@ struct SoundPlayResult
 //     u8* media_ptr;
 // };
 
-// todo: should be a lookup table, not linked list.
-// implement as an array (or, learn about cpp stuff?)
+// study: How to do lookup table given manual memory management.
 struct SoundAssetTable {
     AudioAsset value;
     SoundAssetTable* next;
@@ -102,8 +188,8 @@ struct Input
 // control.
 struct AngelInput
 {
-    v2_i64 lr;
-    v2_i64 z;
+    v2_i64 stick_1;
+    v2_i64 stick_2;
     u16 buttons;
     u16 keys;
 };
@@ -132,48 +218,6 @@ struct AngelInputArray
 #define KEY_W 8
 
 static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs);
-
-// WE DONT CARE.
-// On some user config screen. Get device input tags. Receive events on new device connected? it would only be 
-//       relevant on this screen.
-//
-// WE DONT CARE.
-// Allow user to assign the above inputs to these input tags.
-//
-// WE DONT CARE.
-// Platform writes some inputs tagged up.
-//
-// WE CARE.
-// Game will use UserInputConfig to determine what this corresponds to.
-
-// WE CARE about default mapping. So, control sticks can default map. WASD, and arrows can default map.
-// We can say on the platform side that sThumbLX and sThumbLY are default InputResult.one.
-// We can also say that WASD is also. 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // SOUND.
 void SoundOutput();

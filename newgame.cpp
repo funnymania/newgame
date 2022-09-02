@@ -1,6 +1,5 @@
 #include "newgame.h"
-#include "asset_table.cpp"
-#include "area.cpp"
+#include "geometry_m.h"
 
 // static AudioAsset loaded_sounds[10];
 // static u32 loaded_sounds_len = 0;
@@ -14,7 +13,8 @@ static Input final_inputs[MAX_DEVICES];
 static AngelInputArray angel_inputs = {};
 static GameMemory game_memory = {};
 
-// static RunningModels runtime_models;
+static DoubleInterpolatedPattern rumble_pattern;
+
 static Camera camera;
 
 static Area current_area;
@@ -46,34 +46,35 @@ static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y
     }
 }
 
-static void InitGame() 
+static void InitGame(GameMemory* memory) 
 {
+    // Init memory which we allocate everything from.
+    game_memory = *memory; // copy.
+    game_memory.next_available = (u64*)game_memory.permanent_storage;
+    game_memory.initialized = true;
+
+    // Object for dual-motor rumbling.
+    rumble_pattern = {};
+
     // CreateSoundTable();
     camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
-    game_memory.transient_storage_remaining -= sizeof(camera);
+    game_memory.permanent_storage_remaining -= sizeof(camera);
+    game_memory.next_available += sizeof(camera);
 
     current_area = LoadArea("Place", &game_memory);
-    
 }
 
 static void AssignInput(std::vector<AngelInput> inputs) 
 {
     for (int i = angel_inputs.open_index; i < inputs.size(); i += 1) {
         AngelInput new_angel = inputs.at(i);
-        angel_inputs.inputs[i] = new_angel; // This is copy semantics! So this is a thing that RUST can improve upon.
+        angel_inputs.inputs[i] = new_angel; // Copy.
         angel_inputs.open_index += 1;
-
-        // If this were Rust:
-        // AngelInput new_angel = inputs.at(i);
-        // angel_inputs[i] = AngelInput { ..new_angel }; // This is EXPLICIT. It is NOT a reference, it is a new 
-        //                                                //     struct.
-        // We CAN accomplish as we did above in c++, IF we derive or implement our own support on the AngelInput struct
-        //       specifically FOR copy semantics.
 
         // Default values for final_input.
         Input new_in;
-        new_in.lr = &angel_inputs.inputs[i].lr;
-        new_in.z = &angel_inputs.inputs[i].z;
+        new_in.lr = &angel_inputs.inputs[i].stick_1;
+        new_in.z = &angel_inputs.inputs[i].stick_2;
         new_in.interact_mask = 8;
         final_inputs[i] = new_in;
     }
@@ -89,12 +90,11 @@ static void ConfigScreen()
     // option to reset to default.
 }
 
-
 static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs) 
 {
-    for (int i = 0; i < angel_inputs.open_index; i += 1) { 
-        angel_inputs.inputs[i].lr = inputs[i].lr;
-        angel_inputs.inputs[i].z = inputs[i].z;
+    for (int i = 0; i < angel_inputs.open_index; i += 1) {
+        angel_inputs.inputs[i].stick_1 = inputs[i].stick_1;
+        angel_inputs.inputs[i].stick_2 = inputs[i].stick_2;
         angel_inputs.inputs[i].keys = inputs[i].keys;
 
         buffer->x_offset += 2 * final_inputs[i].lr->x / 32768;
@@ -103,8 +103,8 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
         int interact_down = angel_inputs.inputs[i].keys & final_inputs[i].interact_mask;
         if (interact_down == final_inputs[i].interact_mask) {
             // Switch left and right control stick. 
-            final_inputs[i].lr = &angel_inputs.inputs[i].z;
-            final_inputs[i].z = &angel_inputs.inputs[i].lr;
+            final_inputs[i].lr = &angel_inputs.inputs[i].stick_2;
+            final_inputs[i].z = &angel_inputs.inputs[i].stick_1;
         }
     }
 }
@@ -112,9 +112,19 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
 static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
 {
     if (game_memory.initialized == false) {
-        game_memory = *memory; // copy.
-        InitGame();
-        game_memory.initialized = true;
+        InitGame(memory);
+
+        // Persona4 style rumbling.
+        f32 first_arr[3][2] = {{0,0}, {20000,30}, {0,60}};
+        Sequence_f32 first {first_arr, 3, &game_memory };
+
+        Sequence_f32 second { first_arr, 3 , &game_memory};
+
+        rumble_pattern = DoubleInterpolatedPattern::Create(first, second);
+    }
+   
+    if (rumble_pattern.current_time <= 59) {
+        Persona4Handshake(&rumble_pattern);
     }
 
     // study: should perhaps be running more often than renderer.
@@ -134,9 +144,6 @@ static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer,
     AssignInput(inputs);
     ProcessInputs(buffer, inputs);
     RenderWeirdGradient(buffer, buffer->x_offset, buffer->y_offset);
-    
-    // todo: render the cube!
-    // RenderModels(&current_area.models, camera);
 }
 
 enum AudioCode 
@@ -211,9 +218,3 @@ static AudioMessageQueue audio_queue = {};
 //         }
 //     }
 // }
-
-// receives buffers, with formats to know how to write....
-static void ReceivedAudioBuffer(AudioAsset* audio)
-{
-     
-}
