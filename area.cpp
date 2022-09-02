@@ -1,4 +1,3 @@
-
 // Contains Assets which are loaded, stored in Area files.
 struct Area 
 {
@@ -24,4 +23,3 @@ static Area LoadArea(char* name, GameMemory* game_memory)
 
     return(result);
 }
-

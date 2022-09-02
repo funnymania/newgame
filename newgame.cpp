@@ -1,5 +1,4 @@
 #include "newgame.h"
-#include "geometry_m.h"
 
 // static AudioAsset loaded_sounds[10];
 // static u32 loaded_sounds_len = 0;
@@ -13,7 +12,8 @@ static Input final_inputs[MAX_DEVICES];
 static AngelInputArray angel_inputs = {};
 static GameMemory game_memory = {};
 
-static DoubleInterpolatedPattern rumble_pattern;
+// Object for dual-motor rumbling.
+static DoubleInterpolatedPattern rumble_patterns[MAX_DEVICES] = {};
 
 static Camera camera;
 
@@ -51,10 +51,7 @@ static void InitGame(GameMemory* memory)
     // Init memory which we allocate everything from.
     game_memory = *memory; // copy.
     game_memory.next_available = (u64*)game_memory.permanent_storage;
-    game_memory.initialized = true;
 
-    // Object for dual-motor rumbling.
-    rumble_pattern = {};
 
     // CreateSoundTable();
     camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
@@ -62,6 +59,14 @@ static void InitGame(GameMemory* memory)
     game_memory.next_available += sizeof(camera);
 
     current_area = LoadArea("Place", &game_memory);
+
+    // Persona4 style rumbling.
+    f32 first_arr[3][2] = {{0,0}, {20000,30}, {0,60}};
+    Sequence_f32 first = Sequence_f32::Create(first_arr, 3, &game_memory);
+    Sequence_f32 second = Sequence_f32::Create(first_arr, 3, &game_memory);
+
+    // study: statics??
+    rumble_patterns[0] = DoubleInterpolatedPattern::Create(first, second);
 }
 
 static void AssignInput(std::vector<AngelInput> inputs) 
@@ -109,22 +114,10 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
     }
 }
 
-static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
 {
-    if (game_memory.initialized == false) {
-        InitGame(memory);
-
-        // Persona4 style rumbling.
-        f32 first_arr[3][2] = {{0,0}, {20000,30}, {0,60}};
-        Sequence_f32 first {first_arr, 3, &game_memory };
-
-        Sequence_f32 second { first_arr, 3 , &game_memory};
-
-        rumble_pattern = DoubleInterpolatedPattern::Create(first, second);
-    }
-   
-    if (rumble_pattern.current_time <= 59) {
-        Persona4Handshake(&rumble_pattern);
+    if (rumble_patterns[0].current_time <= 59) {
+        Persona4Handshake(&rumble_patterns[0]);
     }
 
     // study: should perhaps be running more often than renderer.

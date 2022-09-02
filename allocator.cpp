@@ -1,10 +1,7 @@
 // Asks for memory appropriately circumstantially.
-
 #include <stdio.h>
 #include <string>
-#include <vector>
 
-#include "geometry_m.h"
 #include "newgame.h"
 #include "file_io.h"
 

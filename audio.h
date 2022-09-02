@@ -17,4 +17,6 @@ struct StaticAudioStream
     u8* media_ptr;
 };
 
+static void LoadSound(char* file_name, SoundAssetTable** sound_assets, GameMemory* game_memory);
+
 #endif

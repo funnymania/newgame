@@ -3,13 +3,18 @@
 #include <stdint.h>
 #include <vector>
 
+#include "primitives.h"
+#include "sequence.cpp"
+#include "double_interpolated_pattern.cpp"
+#include "geometry_m.h"
 #include "allocator.cpp"
-#include "win32_audio.cpp"
+#include "area.cpp"
 #include "win32_gamepad.cpp"
+#include "win32_audio.cpp"
+
+#include "newgame.cpp"
 
 #include "asset_table.cpp"
-#include "area.cpp"
-#include "newgame.cpp"
 
 struct win32_offscreen_buffer
 {
@@ -93,7 +98,7 @@ LRESULT Win32MainWindowCallback(
         case WM_DESTROY: 
         {
             // study: how to kill the loop in WinMain without a global?
-            program_running = false;
+            // program_running = false;
         } break;
 
         case WM_ACTIVATEAPP: 
@@ -309,6 +314,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
+            InitGame(&game_memory);
+
             std::vector<AngelInput> inputs;
             
             bool all_sounds_stop = false;
@@ -342,7 +349,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 // Get device inputs.
                 GetDeviceInputs(&inputs, &program_running);
 
-                GameUpdateAndRender(&game_memory, &buffer, inputs);
+                GameUpdateAndRender(&buffer, inputs);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
