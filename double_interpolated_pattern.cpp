@@ -12,11 +12,11 @@ DoubleInterpolatedPattern DoubleInterpolatedPattern::Create(Sequence_f32 sequenc
 
     // Compute the full values.
     for (int i = 0; i < sequence.size - 1; i += 1) {
-        int current_value = (&sequence.arr[2*i])[0];
-        int next_value = (&sequence.arr[2 * (i + 1)])[0];
+        f32 current_value = (&sequence.arr[2*i])[0];
+        f32 next_value = (&sequence.arr[2 * (i + 1)])[0];
 
-        int current_time = (&sequence.arr[2*i])[1];
-        int next_time = (&sequence.arr[2 * (i + 1)])[1];
+        int current_time = (int)(&sequence.arr[2*i])[1];
+        int next_time = (int)(&sequence.arr[2 * (i + 1)])[1];
         
         for (int j = current_time; j < next_time; j += 1) {
             result.value[j] = 
@@ -27,11 +27,11 @@ DoubleInterpolatedPattern DoubleInterpolatedPattern::Create(Sequence_f32 sequenc
     }
 
     for (int i = 0; i < sequence2.size - 1; i += 1) {
-        int current_time = (&sequence2.arr[2*i])[1];
-        int next_time = (&sequence2.arr[2 * (i + 1)])[1];
+        f32 current_value = (&sequence2.arr[2*i])[0];
+        f32 next_value = (&sequence2.arr[2*(i + 1)])[0];
 
-        int current_value = (&sequence2.arr[2*i])[0];
-        int next_value = (&sequence2.arr[2*(i + 1)])[0];
+        int current_time = (int)(&sequence2.arr[2*i])[1];
+        int next_time = (int)(&sequence2.arr[2 * (i + 1)])[1];
         
         for (int j = current_time; j < next_time; j += 1) {
             result.value_2[j] = 

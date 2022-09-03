@@ -8,7 +8,6 @@
 #include <mmdeviceapi.h>
 // #include <combaseapi.h> // For ComPtr.
 
-#include "file_io.h"
 #include "audio.h"
 #include "newgame.h"
 // #include "asset_table.cpp"
@@ -45,7 +44,6 @@ struct SpatialAudioStream
 
 
 static bool user_spatial_audio = true;
-static bool all_sounds_stop = false;
 
 // static SoundAssetTable sound_assets;
 
@@ -67,8 +65,6 @@ static WAVEFORMATEX default_static_format = {
 // todo: Some kind of logging for if file reads crash.
 static void LoadSound(char* file_name, SoundAssetTable** sound_assets, GameMemory* game_memory)
 {
-    HRESULT hr;
-
     AudioAsset new_sound = {};
     strcpy(new_sound.name, file_name);
 
@@ -290,9 +286,8 @@ static ISpatialAudioClient* InitSpatialAudioClient()
 
     UINT32 len;
     hr = (*enu).GetCount(&len);
-    for (int counter = 0; counter < len; counter += 1) {
+    for (u32 counter = 0; counter < len; counter += 1) {
         (*enu).GetFormat(counter, &supported);
-        int bleh = 4;        
     }
 
     SAFE_RELEASE(defaultDevice)
@@ -382,7 +377,7 @@ static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound, GameMemory* g
     hr = stream.render_client->ReleaseBuffer(stream.buffer_frame_count, 0);
 
     // Calculate how long to sleep for....
-    stream.buffer_duration = (double)REFTIMES_PER_SEC * stream.buffer_frame_count / sound->sample_rate;
+    stream.buffer_duration = (u64)REFTIMES_PER_SEC * stream.buffer_frame_count / sound->sample_rate;
 
     stream.audio_client = audio_client;
     stream.paused = false;
@@ -404,7 +399,6 @@ static StaticAudioStream SetupStaticAudioStream(AudioAsset* sound, GameMemory* g
 static DWORD WINAPI PlayStaticAudio(LPVOID param) 
 {
     HRESULT hr;
-    int counter = 0;
     StaticAudioStream* stream = (StaticAudioStream*) param;
 
     stream->audio_client->Start();
@@ -503,7 +497,7 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
                     reverse_memcpy(reverse_ptr, stream->media_ptr, padding_frames_count * 6);
                     stream->media_ptr -= padding_frames_count * 6;
 
-                    u32 back_frames = used_frames - padding_frames_count;
+                    // u32 back_frames = used_frames - padding_frames_count;
                     reverse_memcpy(stream->buffer, stream->media_ptr, used_frames * 6);
                     play_in_reverse_first = false;
                 } else {
@@ -551,8 +545,6 @@ static void PlaySpatialAudio(SpatialAudioStream* stream, WAVEFORMATEX format, st
 
     while (it != (*spatial_sounds).end()) {
         it->audioObject->GetBuffer(&buffer, &bufferLength);
-        float etc = it->position.x;
-        float yada = it->position.x + 19;
 
         if (it->totalFrameCount >= frameCount) {
             // Write audio data to the buffer

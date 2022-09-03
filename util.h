@@ -62,9 +62,6 @@ static void ParseWavHeader(u8* data, AudioAsset* result)
     
     scan += 6;
 
-    // after four bytes are the bit.
-    u32 bits;
-
     result->bits += *scan;
     scan += 1;
 
@@ -89,7 +86,7 @@ void reverse_memcpy(void* dest, void* src, u32 size)
 {
     u8* dest_tmp = (u8*)dest;
     u8* src_tmp = (u8*)src;
-    for (int counter = 0; counter < size; counter += 1) {
+    for (u32 counter = 0; counter < size; counter += 1) {
         // *dest = *src;
         // src -= 1;
         // dest += 1;

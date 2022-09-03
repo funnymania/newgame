@@ -1,7 +1,3 @@
-#define internal static
-#define local_persist static
-#define global_variable static
-
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
 typedef X_INPUT_GET_STATE(x_input_get_state);
 X_INPUT_GET_STATE(XInputGetStateStub) {
@@ -81,7 +77,6 @@ internal void GetDeviceInputs(std::vector<AngelInput>* result, bool* program_run
         }
 
         // Get keyboard inputs.
-        // W.
         if (GetAsyncKeyState(87) & 0x01) {
             // buffer.y_offset += -2;
             // Pause("Eerie_Town.wav");
@@ -89,26 +84,26 @@ internal void GetDeviceInputs(std::vector<AngelInput>* result, bool* program_run
             angelic.keys ^= KEY_W;
         }
 
-        // A.
         if (GetAsyncKeyState(65) & 0x01) {
             // buffer.x_offset += 2;
             // Unpause("Eerie_Town.wav");
+            angelic.keys ^= KEY_A;
         }
 
-        // S.
         if (GetAsyncKeyState(83) & 0x01) {
             // buffer.y_offset += 2;
             // StopPlaying("Eerie_Town.wav");
+            angelic.keys ^= KEY_S;
         }
 
-        // D.
         if (GetAsyncKeyState(68) & 0x01) {
             // buffer.x_offset += -2;
+            angelic.keys ^= KEY_D;
         }
 
         // Alt + F4
         if (GetAsyncKeyState(VK_MENU) && GetAsyncKeyState(VK_F4)) {
-           program_running = false;
+            program_running = false;
         }
 
         result->push_back(angelic);
@@ -121,8 +116,8 @@ void Persona4Handshake(DoubleInterpolatedPattern* pattern)
     ZeroMemory(&vibration, sizeof(XINPUT_VIBRATION));
 
     // 0-65535, lo motor
-    vibration.wLeftMotorSpeed = pattern->value[pattern->current_time];
-    vibration.wRightMotorSpeed = pattern->value_2[pattern->current_time];      
+    vibration.wLeftMotorSpeed = (WORD)pattern->value[pattern->current_time];
+    vibration.wRightMotorSpeed = (WORD)pattern->value_2[pattern->current_time];      
 
     pattern->current_time += 1;
 

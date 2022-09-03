@@ -4,7 +4,7 @@
 // List of 2-arrays
 struct Sequence_f32 
 {
-    f64* arr;
+    f32* arr;
     u64 size;
 
     Sequence_f32() {}

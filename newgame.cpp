@@ -10,7 +10,6 @@ static SoundAssetTable sound_assets = {};
 // note: we should probably support local multiplayer.
 static Input final_inputs[MAX_DEVICES];
 static AngelInputArray angel_inputs = {};
-static GameMemory game_memory = {};
 
 // Object for dual-motor rumbling.
 static DoubleInterpolatedPattern rumble_patterns[MAX_DEVICES] = {};
@@ -21,10 +20,7 @@ static Area current_area;
 
 static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y_offset) 
 {
-    int width = buffer->width;
-    int height = buffer->height;
-
-    int pitch = width * buffer->bytes_per_pixel;
+    int pitch = buffer->width * buffer->bytes_per_pixel;
     u8 *row = (u8 *)buffer->memory; 
     for (int y = 0; y < buffer->height; y += 1) {
         u8 *pixel = (u8 *)row;
@@ -46,27 +42,26 @@ static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y
     }
 }
 
-static void InitGame(GameMemory* memory) 
+static void InitGame(GameMemory* game_memory) 
 {
     // Init memory which we allocate everything from.
-    game_memory = *memory; // copy.
-    game_memory.next_available = (u64*)game_memory.permanent_storage;
-
+    game_memory->next_available = (u64*)game_memory->permanent_storage;
 
     // CreateSoundTable();
     camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
-    game_memory.permanent_storage_remaining -= sizeof(camera);
-    game_memory.next_available += sizeof(camera);
+    game_memory->permanent_storage_remaining -= sizeof(camera);
+    game_memory->next_available += sizeof(camera);
 
-    current_area = LoadArea("Place", &game_memory);
+    current_area = LoadArea("Place", game_memory);
 
     // Persona4 style rumbling.
     f32 first_arr[3][2] = {{0,0}, {20000,30}, {0,60}};
-    Sequence_f32 first = Sequence_f32::Create(first_arr, 3, &game_memory);
-    Sequence_f32 second = Sequence_f32::Create(first_arr, 3, &game_memory);
+    Sequence_f32 first = Sequence_f32::Create(first_arr, 3, game_memory);
+    Sequence_f32 second = Sequence_f32::Create(first_arr, 3, game_memory);
 
-    // study: statics??
     rumble_patterns[0] = DoubleInterpolatedPattern::Create(first, second);
+
+    game_memory->initialized = true;
 }
 
 static void AssignInput(std::vector<AngelInput> inputs) 
@@ -102,20 +97,33 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
         angel_inputs.inputs[i].stick_2 = inputs[i].stick_2;
         angel_inputs.inputs[i].keys = inputs[i].keys;
 
-        buffer->x_offset += 2 * final_inputs[i].lr->x / 32768;
-        buffer->y_offset += 2 * final_inputs[i].lr->y / 32768;
+        buffer->x_offset += (u32)(2 * final_inputs[i].lr->x / 32768);
+        buffer->y_offset += (u32)(2 * final_inputs[i].lr->y / 32768);
 
-        int interact_down = angel_inputs.inputs[i].keys & final_inputs[i].interact_mask;
+        // This is how we check if some game defined behavior is occcuring.
+        u16 interact_down = angel_inputs.inputs[i].keys & final_inputs[i].interact_mask;
         if (interact_down == final_inputs[i].interact_mask) {
             // Switch left and right control stick. 
             final_inputs[i].lr = &angel_inputs.inputs[i].stick_2;
             final_inputs[i].z = &angel_inputs.inputs[i].stick_1;
         }
+
+        // todo: area command parsing. if keyboard is L_KEY (HELD DOWN) + NUMBER (TYPED OUT), and then LET GO OF
+        //       L_KEY, switch to Level_NUMBER.
+#if NEWGAME_INTERNAL
+        
+#endif
     }
 }
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs)
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
+        GameMemory* platform_memory)
 {
+    GameMemory* game_memory = platform_memory;
+    if (game_memory->initialized == false) {
+       InitGame(game_memory);
+    }
+
     if (rumble_patterns[0].current_time <= 59) {
         Persona4Handshake(&rumble_patterns[0]);
     }
@@ -126,10 +134,10 @@ static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelIn
     // study: always be given a buffer for each supported audio type. 
     if (running_sounds_len == 0) {
         SoundAssetTable* sound_ptr = &sound_assets;
-        LoadSound("Eerie_Town.wav", &sound_ptr, &game_memory); // Points our SoundAssetTable to the new head.
+        LoadSound("Eerie_Town.wav", &sound_ptr, game_memory); // Points our SoundAssetTable to the new head.
         
         // AudioMessage play_sound = { PLAY, audio };
-        StartPlaying("Eerie_Town.wav", &sound_assets, &game_memory);
+        StartPlaying("Eerie_Town.wav", &sound_assets, game_memory);
 
         running_sounds_len += 1;
     } 

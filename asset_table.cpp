@@ -28,7 +28,7 @@ static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset, GameMemory
         current = current->next;
     } 
 
-    // return(table);
+    return(0);
 }
 
 static AudioAsset* Get(SoundAssetTable* table, char* name) 

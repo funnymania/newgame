@@ -7,7 +7,7 @@
 #include "sequence.cpp"
 #include "double_interpolated_pattern.cpp"
 #include "geometry_m.h"
-#include "allocator.cpp"
+#include "win32_fileio.cpp"
 #include "area.cpp"
 #include "win32_gamepad.cpp"
 #include "win32_audio.cpp"
@@ -49,34 +49,34 @@ internal win32_window_dimensions GetWindowDimension(HWND window)
 }
 
 // note: callled on WM_SIZE.
-internal void Win32ResizeDIBSection(GameOffscreenBuffer *buffer, LONG width, LONG height) 
+internal void Win32ResizeDIBSection(GameOffscreenBuffer *screen_buffer, LONG width, LONG height) 
 {
-    if (buffer->memory) {
-        VirtualFree(buffer->memory, 0, MEM_RELEASE);
+    if (screen_buffer->memory) {
+        VirtualFree(screen_buffer->memory, 0, MEM_RELEASE);
     }
 
-    buffer->width = width;
-    buffer->height = height;
+    screen_buffer->width = width;
+    screen_buffer->height = height;
 
-    buffer->info.bmiHeader.biSize = sizeof(buffer->info.bmiHeader);
-    buffer->info.bmiHeader.biWidth = buffer->width;
-    buffer->info.bmiHeader.biHeight = -buffer->height;
-    buffer->info.bmiHeader.biPlanes = 1;
-    buffer->info.bmiHeader.biBitCount = 32;
-    buffer->info.bmiHeader.biCompression = BI_RGB;
+    screen_buffer->info.bmiHeader.biSize = sizeof(screen_buffer->info.bmiHeader);
+    screen_buffer->info.bmiHeader.biWidth = screen_buffer->width;
+    screen_buffer->info.bmiHeader.biHeight = -screen_buffer->height;
+    screen_buffer->info.bmiHeader.biPlanes = 1;
+    screen_buffer->info.bmiHeader.biBitCount = 32;
+    screen_buffer->info.bmiHeader.biCompression = BI_RGB;
 
-    int bitmap_memory_size = buffer->bytes_per_pixel * buffer->width * buffer->height;
-    buffer->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
+    int bitmap_memory_size = screen_buffer->bytes_per_pixel * screen_buffer->width * screen_buffer->height;
+    screen_buffer->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
 
-    RenderWeirdGradient(buffer, buffer->x_offset, buffer->y_offset);
+    RenderWeirdGradient(screen_buffer, screen_buffer->x_offset, screen_buffer->y_offset);
 }
 
 // note: callled on WM_PAINT.
-internal void Win32DisplayBufferInWindow(GameOffscreenBuffer *buffer, 
+internal void Win32DisplayBufferInWindow(GameOffscreenBuffer *screen_buffer, 
         HDC DeviceContext, int X, int Y, int width, int height) 
 {
-    StretchDIBits(DeviceContext, 0, 0, width, height, 0, 0, buffer->width, buffer->height, buffer->memory, 
-            &buffer->info, DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(DeviceContext, 0, 0, width, height, 0, 0, screen_buffer->width, screen_buffer->height, screen_buffer->memory, 
+            &screen_buffer->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT Win32MainWindowCallback(
@@ -101,6 +101,10 @@ LRESULT Win32MainWindowCallback(
             // program_running = false;
         } break;
 
+        case WM_QUIT: 
+        {
+        } break;
+
         case WM_ACTIVATEAPP: 
         {
             OutputDebugStringA("WM_ACTIVATEAPP\n");
@@ -118,26 +122,6 @@ LRESULT Win32MainWindowCallback(
 
         case WM_KEYDOWN:
         {
-            // OutputDebugStringA("WNDcallback\n");
-            // W.
-//             if (GetKeyState(87) >= 0) {
-//                global_back_buffer.y_offset += -1;
-//             }
-// 
-//             // A.
-//             if (GetKeyState(65) >= 0) {
-//                 global_back_buffer.x_offset += 1;
-//             }
-// 
-//             // S.
-//             if (GetKeyState(83) >= 0) {
-//                 global_back_buffer.y_offset += 1;
-//             }
-// 
-//             // D.
-//             if (GetKeyState(68) >= 0) {
-//                 global_back_buffer.x_offset += -1;
-//             }
         } break;
 
         case WM_KEYUP:
@@ -279,8 +263,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     AudioObj obj = {
                         audioObject,
                         { -100, 0, 0 },
-                        { 0.1, 0, 0 },
-                        0.2,
+                        { 0.1f, 0, 0 },
+                        0.2f,
                         3000, // Should be our song data...
                         spatial_format.nSamplesPerSec * 5 // 5 seconds of audio samples
                     };
@@ -313,8 +297,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             game_memory.transient_storage_remaining = game_memory.transient_storage_size;
 
             Assert(game_memory.permanent_storage_size >= Megabytes(64));
-
-            InitGame(&game_memory);
 
             std::vector<AngelInput> inputs;
             
@@ -349,16 +331,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 // Get device inputs.
                 GetDeviceInputs(&inputs, &program_running);
 
-                GameUpdateAndRender(&buffer, inputs);
+                GameUpdateAndRender(&buffer, inputs, &game_memory);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
 
-                Win32DisplayBufferInWindow(
-                        &buffer, 
-                        device_context, 0, 0, 
-                        client_rect.width, 
-                        client_rect.height);
+                Win32DisplayBufferInWindow(&buffer, device_context, 0, 0, client_rect.width, client_rect.height);
 
                 ReleaseDC(window, device_context);
 
@@ -374,12 +352,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 char buffer_test[256];
 
-#if 0
                 i64 frames_per_second = 1000 / ms_per_frame;
                 wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", ms_per_frame, 
                         frames_per_second, mz_per_frame);
                 OutputDebugString(buffer_test);
-#endif
 
                 last_counter = end_counter;
                 last_cycle_count = end_cycle_count;

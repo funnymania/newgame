@@ -1,6 +1,13 @@
 #ifndef NEWGAME_H
 #define NEWGAME_H
 
+// note: services that the platform provides to the game.
+#if NEWGAME_INTERNAL
+internal void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory);
+internal void PlatformFreeFileMemory(void* memory);
+internal bool PlatformWriteEntireFile(char* file_name, u32 data_size, void* data);
+#endif
+
 // study: How to do lookup table given manual memory management.
 struct SoundAssetTable {
     AudioAsset value;
@@ -49,9 +56,14 @@ struct AngelInputArray
 #define BUTTON_X 256
 #define BUTTON_Y 512
 
-#define STICK_DEADSPACE 4000
+// MSFT recommends around 7800 for the left stick, around 8200 for the right. I don't know why. This is the value I
+// have set on both for now.
+#define STICK_DEADSPACE 7600
 
 // Computer Keyboard.
+#define KEY_A 1
+#define KEY_S 2
+#define KEY_D 4
 #define KEY_W 8
 
 static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs);
