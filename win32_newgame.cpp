@@ -2,6 +2,7 @@
 #include <xinput.h>
 #include <stdint.h>
 #include <vector>
+#include <timeapi.h>
 
 #include "primitives.h"
 #include "sequence.cpp"
@@ -151,9 +152,19 @@ LRESULT Win32MainWindowCallback(
     return(Result);
 }
 
+inline LARGE_INTEGER Win32GetWallclock() 
+{
+    LARGE_INTEGER result;
+    QueryPerformanceCounter(&result);
+    return(result);
+}
+
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine, int nCmdShow) 
 {
     WNDCLASSEXA WindowClass = {};
+
+    u8 scheduler_ms = 1;
+    bool granularized_sleep = (timeBeginPeriod(scheduler_ms) == TIMERR_NOERROR);
 
     Win32LoadXInput();
     Win32ResizeDIBSection(&buffer, 1280, 720);
@@ -165,6 +176,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     // WindowClass.hIcon = instance;
     WindowClass.lpszClassName = "NewGameWindowClass";
     // HICON     hIconSm;
+    
+    int monitor_refresh_rate = 60;
+    int game_update_rate = 30;
+    f32 target_seconds_per_frame = 1.0f / game_update_rate;
 
     // Locked in value on OS boot, used for computing framerates.
     LARGE_INTEGER perf_counter_frequency_result;
@@ -273,6 +288,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
             }
 
+            // Counter for determining time passed, with granularity less than a microsecond.
+            // This is relevant, as our game runs its update loop on the order of milliseconds (16.7 for 60fps).
             LARGE_INTEGER last_counter;
             QueryPerformanceCounter(&last_counter);
 
@@ -304,11 +321,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             while (program_running == true) {
                 // GAME LOOP.
-                // Counter for determining time passed, with granularity greater than a microsecond.
-                // This is relevant, as our game runs its update loop on the order of milliseconds.
-                LARGE_INTEGER begin_counter;
-                QueryPerformanceCounter(&begin_counter);
-
                 MSG Message;
                 while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
                     if (Message.message == WM_QUIT) {
@@ -331,6 +343,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 // Get device inputs.
                 GetDeviceInputs(&inputs, &program_running);
 
+                // Call on game to provide joy.
                 GameUpdateAndRender(&buffer, inputs, &game_memory);
 
                 HDC device_context = GetDC(window);
@@ -342,11 +355,33 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 i64 end_cycle_count = __rdtsc();
                 
-                LARGE_INTEGER end_counter;
-                QueryPerformanceCounter(&end_counter);
+                LARGE_INTEGER end_counter = Win32GetWallclock();
 
                 i64 cycles_elapsed = end_cycle_count - last_cycle_count;
                 i64 counter_elapsed = end_counter.QuadPart - last_counter.QuadPart;
+
+                f32 seconds_elapsed_per_work = (f32)counter_elapsed / (f32)perf_counter_frequency;
+                f32 seconds_elapsed_per_frame = seconds_elapsed_per_work;
+                if (seconds_elapsed_per_frame < target_seconds_per_frame) {
+                    while (seconds_elapsed_per_frame < target_seconds_per_frame) {
+                        if (granularized_sleep) {
+                            DWORD ms_to_sleep = (DWORD)(1000 * (target_seconds_per_frame - seconds_elapsed_per_frame));
+                            Sleep(ms_to_sleep);
+                        }
+
+                        LARGE_INTEGER end_count;
+                        QueryPerformanceCounter(&end_count);
+                        seconds_elapsed_per_frame = (f32)(end_count.QuadPart - last_counter.QuadPart) 
+                            / (f32)perf_counter_frequency;
+                        // timeEndPeriod(ms_to_sleep);
+                    }
+                } else {
+                    // note: frame rate miss... 
+                }
+
+                end_counter = Win32GetWallclock();
+                counter_elapsed = end_counter.QuadPart - last_counter.QuadPart;
+
                 i64 ms_per_frame = 1000 * counter_elapsed / perf_counter_frequency;
                 i32 mz_per_frame = (i32)(cycles_elapsed / 1000 / 1000);
 
