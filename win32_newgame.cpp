@@ -212,10 +212,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     WindowClass.style = CS_HREDRAW|CS_VREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     WindowClass.hInstance = instance;
-    // WindowClass.hIcon = instance;
     WindowClass.lpszClassName = "NewGameWindowClass";
+    // WindowClass.hIcon = instance;
     // HICON     hIconSm;
     
+    // note: we can get query somehow, I hope.
     int monitor_refresh_rate = 60;
     int game_update_rate = 30;
     f32 target_seconds_per_frame = 1.0f / game_update_rate;
@@ -225,17 +226,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     QueryPerformanceFrequency(&perf_counter_frequency_result);
     i64 perf_counter_frequency = perf_counter_frequency_result.QuadPart;
 
-    ATOM atom = RegisterClassExA(&WindowClass);
-    
-    if (atom) {
+    if (RegisterClassExA(&WindowClass)) {
         HWND window = CreateWindowExA(0, WindowClass.lpszClassName, "Newgame", WS_OVERLAPPEDWINDOW|WS_VISIBLE,
                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
 
         if (window) {
             HRESULT hr;
             bool program_running = true;
-            win32_buffer.x_offset = 0;
-            win32_buffer.y_offset = 0;
+            // win32_buffer.x_offset = 0;
+            // win32_buffer.y_offset = 0;
 
             // 24/48.
             WAVEFORMATEX format_24_48 = {};
@@ -295,10 +294,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             // note: this is entirely user decided via their Audio Settings. If they do not have Windows Sonic set for
             //       spatialized sound, this will always be 0. We cannot override that through code.
-            if (create_spatial_streams == 0) {
+            if (create_spatial_streams != 0) {
                 // StaticAudioStream stream = SetupStaticAudioStream("", format_24_48, static_client);
                 // hr = stream.audio_client->Start();
-            } else {
                 spatial_audio = SetupSpatialAudioStream(spatial_format, spatial_audio_client, create_spatial_streams);
 
                 hr = spatial_audio.render_stream->Start();
@@ -325,7 +323,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                     spatial_sounds_objects.insert(spatial_sounds_objects.begin(), obj);
                 }
-            }
+            } 
 
             // Counter for determining time passed, with granularity less than a microsecond.
             // This is relevant, as our game runs its update loop on the order of milliseconds (16.7 for 60fps).
@@ -352,6 +350,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
             game_memory.transient_storage_remaining = game_memory.transient_storage_size;
 
+            // Services the Platform is providing to the Game.
             PlatformServices services = {};
             services.load_obj = LoadOBJToMemory;
             services.persona_handshake = Persona4Handshake;
@@ -364,12 +363,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             std::vector<AngelInput> inputs;
             
-            bool all_sounds_stop = false;
             int counter = 0;
 
+            // bug: this is helpful for now while audio still glitching on Library Load.
             bool test = false;
             while (program_running == true) {
-                if (counter > 120 && test == false) {
+                if (counter > 60 && test == false) {
                     Win32UnloadGameLib(game_dll_result);
                     game_dll_result = Win32LoadGameDLL();
 
@@ -379,7 +378,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     counter += 1;
                 }
                 
-                // GAME LOOP.
                 MSG Message;
                 while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
                     if (Message.message == WM_QUIT) {
@@ -391,7 +389,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
 
                 if (create_spatial_streams != 0) {
-                    if (spatial_sounds_objects.size() > 0 && all_sounds_stop == false) {
+                    if (spatial_sounds_objects.size() > 0) {
                         PlaySpatialAudio(&spatial_audio, spatial_format, &spatial_sounds_objects);
                     } else {
                         // Stop the stream 
@@ -403,10 +401,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 GetDeviceInputs(&inputs, &program_running);
 
                 // DLL todos:
-                // pause execution
-                // cache the state.
-                // compile the game code
-                // bring back the state.
+                // - pause execution
+                // - cache the state.
+                // - compile the game code
+                // - bring back the state.
 
                 GameOffscreenBuffer screen_buffer = {};
                 screen_buffer.memory = win32_buffer.memory;
@@ -420,9 +418,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
 
-                // buffer 
                 Win32DisplayBufferInWindow(&win32_buffer, device_context, 0, 0, client_rect.width, client_rect.height);
-
                 ReleaseDC(window, device_context);
 
                 i64 end_cycle_count = __rdtsc();
@@ -462,6 +458,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 i64 frames_per_second = 1000 / ms_per_frame;
                 wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", ms_per_frame, 
                         frames_per_second, mz_per_frame);
+                // note: uncomment for some playtime metrics. Currently conflicting with some debugging.
                 // OutputDebugString(buffer_test);
 
                 last_counter = end_counter;
@@ -473,7 +470,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
         }
     } 
     else {
-        //TODO: Logging...
+        // todo: Log files.
+        DWORD error = GetLastError();
+        OutputDebugString("Class Registration failed");
     }
 
     // // Reset the stream to free it's resources.

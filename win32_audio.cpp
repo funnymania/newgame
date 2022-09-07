@@ -415,7 +415,6 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
         
         // Sleep for half of buffer duration. This means approx half of buffer's audio is unplayed at this point.
         // Wakes upon Stop(), Pause(), etc.
-        DWORD bee = (DWORD)(stream->buffer_duration / REFTIMES_PER_MILLISEC / 2);
         DWORD event_res = WaitForMultipleObjects(4, stream->wait_events, FALSE,
                 (DWORD)(stream->buffer_duration / REFTIMES_PER_MILLISEC / 2));
 

@@ -50,14 +50,14 @@ struct char_size
 };
 
 // Returns the first string of alpha-numeric or 0 if starts with non-alpha-numeric.
-char_size ReadAlphaNumericUntilWhiteSpace(char* start) 
+char_size ReadAlphaNumericUntilWhiteSpace(char* start, char* eof) 
 {
     char_size res = {};
     u64 size = 0;
 
     // pass to get the size of the number.
     char* tmp_start = start;
-    while (std::isspace(*tmp_start) == 0) {
+    while (std::isspace(*tmp_start) == 0 && tmp_start != eof) {
         size += 1;
         tmp_start += 1;
     }
@@ -93,6 +93,7 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
     PlatformReadEntireFile(file_name, &mem, game_memory);
     if (mem.data) {
         char* ptr = (char*)mem.data;
+        char* eof = ptr + mem.data_len;
         std::vector<v3_float> verts;
         std::vector<v3_float> uvs;
         std::vector<v3_float> normals;
@@ -107,7 +108,7 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
                 v3_float uv = {};
                 while (counter < 3) {
                     // read everything in until white space.
-                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr);
+                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr, eof);
 
                     // if white space found, continue
                     if (num.size == 0) {
@@ -149,7 +150,7 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
                 v3_float uv;
                 while (counter < 4) {
                     // read everything in until white space.
-                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr);
+                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr, eof);
 
                     // if white space found, continue
                     if (num.size == 0) {
@@ -193,7 +194,7 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
                 v3_float uv;
                 while (counter < 4) {
                     // read everything in until white space.
-                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr);
+                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr, eof);
 
                     // if white space found, continue
                     if (num.size == 0) {
@@ -237,7 +238,11 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
                 Tri tri = {}; // Does this zero the vectors?
                 while (counter < 4) {
                     // read Triangle Vertex in until white space.
-                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr);
+                    if (current_line == 45) {
+                        OutputDebugString("now");
+                    }
+
+                    char_size num = ReadAlphaNumericUntilWhiteSpace(ptr, eof);
 
                     // if white space found, continue
                     if (num.size == 0) {
