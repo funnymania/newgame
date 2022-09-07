@@ -13,4 +13,6 @@ struct DoubleInterpolatedPattern
     static DoubleInterpolatedPattern Create(Sequence_f32 sequence, Sequence_f32 sequence2);
 };
 
+typedef void persona_handshake(DoubleInterpolatedPattern* pattern);
+
 #endif

@@ -9,15 +9,13 @@
 #include "double_interpolated_pattern.cpp"
 #include "geometry_m.h"
 #include "win32_fileio.cpp"
-#include "area.cpp"
 #include "win32_gamepad.cpp"
 #include "win32_audio.cpp"
-
-#include "newgame.cpp"
+#include "platform_services.h"
 
 #include "asset_table.cpp"
 
-struct win32_offscreen_buffer
+struct Win32OffscreenBuffer
 {
     BITMAPINFO info;
     void *memory;
@@ -34,7 +32,45 @@ struct win32_window_dimensions
     int height; 
 };
 
-global_variable GameOffscreenBuffer buffer;
+struct Win32GameLib 
+{
+    HMODULE dll_handle;
+};
+
+// note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
+typedef void game_update_loop(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
+        GameMemory* platform_memory, PlatformServices services);
+
+// note: basically a 'zero-initialized' function. We need to initialize our pointer below this line to SOMETHING. 
+//       This is that something.
+void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* platform_memory,
+       PlatformServices services) {}
+
+global_variable game_update_loop* GameUpdateAndRender_ = GameUpdateLoopStub;
+#define GameUpdateAndRender GameUpdateAndRender_
+
+internal Win32GameLib Win32LoadGameDLL() 
+{
+    CopyFileA("../build/newgame.dll", "../build/newgame_tmp.dll", FALSE);
+    Win32GameLib game_lib = {};
+    game_lib.dll_handle = LoadLibrary("newgame_tmp.dll");
+    if (game_lib.dll_handle) {
+       GameUpdateAndRender = (game_update_loop*)GetProcAddress(game_lib.dll_handle, "GameUpdateAndRender");
+    }
+
+    return(game_lib);
+}
+
+internal void Win32UnloadGameLib(Win32GameLib lib)
+{
+    if (lib.dll_handle) {
+        FreeLibrary(lib.dll_handle);
+    }
+
+    GameUpdateAndRender = GameUpdateLoopStub;
+}
+
+global_variable Win32OffscreenBuffer win32_buffer;
 
 internal win32_window_dimensions GetWindowDimension(HWND window) 
 {
@@ -50,7 +86,7 @@ internal win32_window_dimensions GetWindowDimension(HWND window)
 }
 
 // note: callled on WM_SIZE.
-internal void Win32ResizeDIBSection(GameOffscreenBuffer *screen_buffer, LONG width, LONG height) 
+internal void Win32ResizeDIBSection(Win32OffscreenBuffer *screen_buffer, LONG width, LONG height) 
 {
     if (screen_buffer->memory) {
         VirtualFree(screen_buffer->memory, 0, MEM_RELEASE);
@@ -69,15 +105,16 @@ internal void Win32ResizeDIBSection(GameOffscreenBuffer *screen_buffer, LONG wid
     int bitmap_memory_size = screen_buffer->bytes_per_pixel * screen_buffer->width * screen_buffer->height;
     screen_buffer->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
 
-    RenderWeirdGradient(screen_buffer, screen_buffer->x_offset, screen_buffer->y_offset);
+    // study: may need this to avoid a glitchy frame between resizes.
+    // RenderWeirdGradient(screen_buffer, screen_buffer->x_offset, screen_buffer->y_offset);
 }
 
 // note: callled on WM_PAINT.
-internal void Win32DisplayBufferInWindow(GameOffscreenBuffer *screen_buffer, 
+internal void Win32DisplayBufferInWindow(Win32OffscreenBuffer *screen_buffer, 
         HDC DeviceContext, int X, int Y, int width, int height) 
 {
-    StretchDIBits(DeviceContext, 0, 0, width, height, 0, 0, screen_buffer->width, screen_buffer->height, screen_buffer->memory, 
-            &screen_buffer->info, DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(DeviceContext, 0, 0, width, height, 0, 0, screen_buffer->width, screen_buffer->height, 
+            screen_buffer->memory, &screen_buffer->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT Win32MainWindowCallback(
@@ -93,7 +130,7 @@ LRESULT Win32MainWindowCallback(
         case WM_SIZE: 
         {
             win32_window_dimensions dimensions = GetWindowDimension(Window);
-            Win32ResizeDIBSection(&buffer, dimensions.width, dimensions.height);
+            Win32ResizeDIBSection(&win32_buffer, dimensions.width, dimensions.height);
         } break;
 
         case WM_DESTROY: 
@@ -139,7 +176,7 @@ LRESULT Win32MainWindowCallback(
             LONG Width = Paint.rcPaint.right - Paint.rcPaint.left;
             LONG height = Paint.rcPaint.bottom - Paint.rcPaint.top;
 
-            Win32DisplayBufferInWindow(&buffer, DeviceContext, X, Y, Width, height);
+            Win32DisplayBufferInWindow(&win32_buffer, DeviceContext, X, Y, Width, height);
             EndPaint(Window, &Paint);
         } break;
 
@@ -167,7 +204,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     bool granularized_sleep = (timeBeginPeriod(scheduler_ms) == TIMERR_NOERROR);
 
     Win32LoadXInput();
-    Win32ResizeDIBSection(&buffer, 1280, 720);
+    Win32GameLib game_dll_result = Win32LoadGameDLL();
+
+    Win32ResizeDIBSection(&win32_buffer, 1280, 720);
 
     WindowClass.cbSize = sizeof(WNDCLASSEXA);
     WindowClass.style = CS_HREDRAW|CS_VREDRAW;
@@ -195,8 +234,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
         if (window) {
             HRESULT hr;
             bool program_running = true;
-            buffer.x_offset = 0;
-            buffer.y_offset = 0;
+            win32_buffer.x_offset = 0;
+            win32_buffer.y_offset = 0;
 
             // 24/48.
             WAVEFORMATEX format_24_48 = {};
@@ -313,13 +352,33 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
             game_memory.transient_storage_remaining = game_memory.transient_storage_size;
 
+            PlatformServices services = {};
+            services.load_obj = LoadOBJToMemory;
+            services.persona_handshake = Persona4Handshake;
+            services.load_sound = LoadSound;
+            services.start_playing = StartPlaying;
+            services.pause_audio = Pause;
+            services.resume_audio = Unpause;
+
             Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
             std::vector<AngelInput> inputs;
             
             bool all_sounds_stop = false;
+            int counter = 0;
 
+            bool test = false;
             while (program_running == true) {
+                if (counter > 120 && test == false) {
+                    Win32UnloadGameLib(game_dll_result);
+                    game_dll_result = Win32LoadGameDLL();
+
+                    test = true;
+                    counter = 0;
+                } else {
+                    counter += 1;
+                }
+                
                 // GAME LOOP.
                 MSG Message;
                 while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
@@ -343,13 +402,26 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 // Get device inputs.
                 GetDeviceInputs(&inputs, &program_running);
 
+                // DLL todos:
+                // pause execution
+                // cache the state.
+                // compile the game code
+                // bring back the state.
+
+                GameOffscreenBuffer screen_buffer = {};
+                screen_buffer.memory = win32_buffer.memory;
+                screen_buffer.width = win32_buffer.width;
+                screen_buffer.height = win32_buffer.height;
+                screen_buffer.bytes_per_pixel = win32_buffer.bytes_per_pixel;
+
                 // Call on game to provide joy.
-                GameUpdateAndRender(&buffer, inputs, &game_memory);
+                GameUpdateAndRender(&screen_buffer, inputs, &game_memory, services);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
 
-                Win32DisplayBufferInWindow(&buffer, device_context, 0, 0, client_rect.width, client_rect.height);
+                // buffer 
+                Win32DisplayBufferInWindow(&win32_buffer, device_context, 0, 0, client_rect.width, client_rect.height);
 
                 ReleaseDC(window, device_context);
 
@@ -390,7 +462,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 i64 frames_per_second = 1000 / ms_per_frame;
                 wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", ms_per_frame, 
                         frames_per_second, mz_per_frame);
-                OutputDebugString(buffer_test);
+                // OutputDebugString(buffer_test);
 
                 last_counter = end_counter;
                 last_cycle_count = end_cycle_count;

@@ -1,3 +1,5 @@
+#include "platform_services.h"
+
 // Contains Assets which are loaded, stored in Area files.
 struct Area 
 {
@@ -12,7 +14,8 @@ static void SwitchArea(char* name, GameMemory* game_memory)
     //       else LoadArea() and then switch
 }
 
-static Area LoadArea(char* name, GameMemory* game_memory) 
+
+static Area LoadArea(char* name, GameMemory* game_memory, PlatformServices services) 
 {
     Area result = {};
 
@@ -24,7 +27,7 @@ static Area LoadArea(char* name, GameMemory* game_memory)
     // Assuming this involves cube.obj in the following position.
     // todo: develop loading schemes.
     // Load models into memory. 
-    Obj* cube = LoadOBJToMemory("cube.obj", game_memory);
+    Obj* cube = services.load_obj("cube.obj", game_memory);
 
     // move the cube.
     cube->tra.pos = { 0, 0, 2 };

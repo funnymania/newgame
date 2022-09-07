@@ -1,3 +1,4 @@
+#include "newgame.h"
 #include "sequence.h"
 
 Sequence_f32 Sequence_f32::Create(f32 array[][2], int arr_size, GameMemory* game_memory) 

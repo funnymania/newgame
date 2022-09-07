@@ -84,8 +84,23 @@ struct Transform
     // v3 scale;
 };
 
+struct Obj 
+{
+    Tri* triangles; // Vertice positions are OFFSETS from tra. A value of (1, 0, 0) is to the left of wherever tra is.
+    Transform tra;
+    u64 triangles_len;
+};
+
+struct Camera 
+{
+    v3 pos;
+    v3 direction;    
+    float wideness;
+};
+
 struct GameMemory 
 {
+    bool initialized;
     void* permanent_storage;
     void* transient_storage;
     u64 permanent_storage_size;
@@ -93,8 +108,9 @@ struct GameMemory
     u64 permanent_storage_remaining;
     u64 transient_storage_remaining;
     u64* next_available;
-    bool initialized;
 };
+
+typedef Obj* load_obj(char* file_name, GameMemory* game_memory);
 
 struct Pair_u16 
 {
@@ -105,13 +121,10 @@ struct Pair_u16
 // note: services that the game provides to the platform layer.
 struct GameOffscreenBuffer
 {
-    BITMAPINFO info;
     void *memory;
     int width;
     int height;
     int bytes_per_pixel = 4;
-    int x_offset = 0; 
-    int y_offset = 0; 
 };
 
 // Audio which is loaded into faster memory.
@@ -143,13 +156,7 @@ struct file_read_result {
     u32 data_len;
 };
 
-// DEPRECATED.
-// Represents a single file.
-// struct StaticSoundAsset {
-//     char* name;
-//     StaticAudioStream* stream; 
-//     DWORD thread_id;
-//     // StaticSoundAsset* next;
-//     u8* media_ptr;
-// };
+// RENDERING.
+void RenderModels(Obj* models, Camera camera);
+bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra);
 

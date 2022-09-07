@@ -3,9 +3,9 @@
 
 // note: services that the platform provides to the game.
 #if NEWGAME_INTERNAL
-internal void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory);
-internal void PlatformFreeFileMemory(void* memory);
-internal bool PlatformWriteEntireFile(char* file_name, u32 data_size, void* data);
+void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory);
+void PlatformFreeFileMemory(void* memory);
+bool PlatformWriteEntireFile(char* file_name, u32 data_size, void* data);
 #endif
 
 // study: How to do lookup table given manual memory management.
@@ -13,6 +13,12 @@ struct SoundAssetTable {
     AudioAsset value;
     SoundAssetTable* next;
 };
+
+typedef void load_sound(char* file_name, SoundAssetTable** sound_assets, GameMemory* game_memory);
+typedef SoundPlayResult start_playing(char* name, SoundAssetTable* sound_assets, GameMemory* game_memory);
+
+typedef SoundPlayResult pause_audio_game(char* name, SoundAssetTable* sound_assets);
+typedef SoundPlayResult resume_audio_game(char* name, SoundAssetTable* sound_assets);
 
 static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset, GameMemory* game_memory);
 static AudioAsset* Get(SoundAssetTable* table, char* name);
@@ -66,14 +72,10 @@ struct AngelInputArray
 #define KEY_D 4
 #define KEY_W 8
 
-static void GameUpdateAndRender(GameMemory* memory, GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs);
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory);
 
 // SOUND.
 void SoundOutput();
-
-// RENDERING.
-void RenderModels(Obj* models, Camera camera);
-bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra);
 
 static void CreateSoundTable();
 #endif

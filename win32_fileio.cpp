@@ -2,9 +2,14 @@
 #include <stdio.h>
 #include <string>
 
-#include "newgame.h"
-
 static DWORD bytes_read;
+
+void PlatformFreeFileMemory(void* memory) 
+{
+    if (memory) {
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+}
 
 // todo: Will return garbage if file is open by some other program.
 void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory) 
@@ -35,13 +40,6 @@ void PlatformReadEntireFile(char* file_name, file_read_result* file_result, Game
         }
 
         CloseHandle(file_handle);
-    }
-}
-
-void PlatformFreeFileMemory(void* memory) 
-{
-    if (memory) {
-        VirtualFree(memory, 0, MEM_RELEASE);
     }
 }
 
@@ -282,7 +280,12 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
                     // If next character is a number, this is the third and final number.
                     int index = std::atoi(vert_ptr);
                     if (index != 0) {
+                        // study: Some kind of white space removal is occurring (sometimes) in which vert_ptr 
+                        //       is pointing at two numbers, instead of a number followed by whitespace.
+                        //       So, instead of '5 ', the ptr is at '58' which is now being read as an index of
+                        //       '58' instead of just '5.
                         tri.normals[counter - 1] = normals.at(index - 1);
+
                         // if (counter == 1) {
                         //     tri.one_normal = normals.at(index - 1); 
                         // }
