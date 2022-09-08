@@ -42,6 +42,9 @@ struct AngelInput
     v2_i64 stick_2;
     u16 buttons;
     u16 keys;
+    u16 keys_first_down;
+    u16 keys_first_up;
+    u16 keys_held_down; // Should ONLY be used by the platform layer.
 };
 
 struct AngelInputArray 
@@ -71,6 +74,22 @@ struct AngelInputArray
 #define KEY_S 2
 #define KEY_D 4
 #define KEY_W 8
+#define KEY_0 16
+#define KEY_1 32
+#define KEY_2 64
+#define KEY_3 128
+#define KEY_4 256
+#define KEY_5 512
+#define KEY_6 1024
+#define KEY_7 2048
+#define KEY_8 4096
+#define KEY_9 8192
+#define KEY_L 16384
+
+struct Win32KeycodeMap {
+    i16 win32_key_code; 
+    u32 game_key_code;
+};
 
 static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory);
 

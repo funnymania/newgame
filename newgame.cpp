@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <vector>
+#include <math.h>
 
 #include "primitives.h"
 #include "sequence.cpp"
@@ -61,7 +62,7 @@ static void InitGame(GameMemory* game_memory, PlatformServices services)
     game_memory->permanent_storage_remaining -= sizeof(camera);
     game_memory->next_available += sizeof(camera);
 
-    current_area = LoadArea("Place", game_memory, services);
+    current_area = LoadArea(0, game_memory, services);
 
     // Persona4 style rumbling.
     f32 first_arr[3][2] = {{0,0}, {20000,30}, {0,60}};
@@ -99,15 +100,85 @@ static void ConfigScreen()
     // option to reset to default.
 }
 
-static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs) 
+static int NumberKeyFirstDown(int bitflag) 
+{
+    int result = -1;
+
+    if (bitflag & KEY_0) {
+        result = 0;
+    }
+    else if (bitflag & KEY_1) {
+
+        result = 1;
+    }
+    else if (bitflag & KEY_2) {
+
+        result = 2;
+    }
+    else if (bitflag & KEY_3) {
+
+        result = 3;
+    }
+    else if (bitflag & KEY_4) {
+
+        result = 4;
+    }
+    else if (bitflag & KEY_5) {
+
+        result = 5;
+    }
+    else if (bitflag & KEY_6) {
+
+        result = 6;
+    }
+    else if (bitflag & KEY_7) {
+
+        result = 7;
+    }
+    else if (bitflag & KEY_8) {
+
+        result = 8;
+    }
+    else if (bitflag & KEY_9) {
+
+        result = 9;
+    }
+
+    return(result);
+}
+
+inline int Calculate10DigitValue(int base, int digit_number)
+{
+    return(int)(base * pow(10, digit_number));
+}
+
+inline bool IsKeyDown(u32 key, u32 device_id) 
+{
+    return((angel_inputs.inputs[device_id].keys & key) == key);
+}
+
+inline bool IsKeyFirstDown(u32 key, u32 device_id)
+{
+    return((angel_inputs.inputs[device_id].keys_first_down & key) == key);
+}
+
+inline bool IsKeyFirstUp(u32 key, u32 device_id)
+{
+    return((angel_inputs.inputs[device_id].keys_first_up & key) == key);
+}
+
+static int dev_stage_id;
+static int digit_number = 0;
+
+static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs, GameMemory* game_memory,
+        PlatformServices services) 
 {
     for (int i = 0; i < angel_inputs.open_index; i += 1) {
         angel_inputs.inputs[i].stick_1 = inputs[i].stick_1;
         angel_inputs.inputs[i].stick_2 = inputs[i].stick_2;
         angel_inputs.inputs[i].keys = inputs[i].keys;
-
-        // buffer->x_offset += (u32)(2 * final_inputs[i].lr->x / 32768);
-        // buffer->y_offset += (u32)(2 * final_inputs[i].lr->y / 32768);
+        angel_inputs.inputs[i].keys_first_down = inputs[i].keys_first_down;
+        angel_inputs.inputs[i].keys_first_up = inputs[i].keys_first_up;
 
         // This is how we check if some game defined behavior is occcuring.
         u16 interact_down = angel_inputs.inputs[i].keys & final_inputs[i].interact_mask;
@@ -117,10 +188,23 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
             final_inputs[i].z = &angel_inputs.inputs[i].stick_1;
         }
 
-        // todo: area command parsing. if keyboard is L_KEY (HELD DOWN) + NUMBER (TYPED OUT), and then LET GO OF
-        //       L_KEY, switch to Level_NUMBER.
+        // note: keys are little endian! this means 'L12' means Load 21.
 #if NEWGAME_INTERNAL
-        
+        if (i == 0) {
+            if (IsKeyDown(KEY_L, i)) {
+                // If numeric key down, continue adding up the following numbers.
+                // note: we just ignore if you hit non-numeric keys while L is held down.
+                int digit_held = NumberKeyFirstDown(angel_inputs.inputs[i].keys_first_down);
+                if (digit_held != -1) {
+                    dev_stage_id += Calculate10DigitValue(digit_held, digit_number);
+                    digit_number += 1;
+                }
+            } else if (IsKeyFirstUp(KEY_L, i)) {
+                LoadArea(dev_stage_id, game_memory, services);
+                dev_stage_id = 0;
+                digit_number = 0;
+            }
+        }
 #endif
     }
 }
@@ -162,7 +246,7 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
     } 
 
     AssignInput(inputs);
-    ProcessInputs(buffer, inputs);
+    ProcessInputs(buffer, inputs, game_memory, services);
     weird_gradient_x += (u32)(2 * final_inputs[0].lr->x / 32768);
     weird_gradient_y += (u32)(2 * final_inputs[0].lr->y / 32768);
     RenderWeirdGradient(buffer, weird_gradient_x, weird_gradient_y);

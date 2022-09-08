@@ -32,12 +32,6 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 
-template <typename T> struct List
-{
-    T* array;
-    u64 size;
-};
-
 struct v2_i64
 {
     i64 x;

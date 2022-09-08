@@ -5,6 +5,7 @@
 #include <timeapi.h>
 
 #include "primitives.h"
+#include "list.cpp"
 #include "sequence.cpp"
 #include "double_interpolated_pattern.cpp"
 #include "geometry_m.h"
@@ -35,6 +36,7 @@ struct win32_window_dimensions
 struct Win32GameLib 
 {
     HMODULE dll_handle;
+    FILETIME last_write_time;
 };
 
 // note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
@@ -49,10 +51,29 @@ void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inp
 global_variable game_update_loop* GameUpdateAndRender_ = GameUpdateLoopStub;
 #define GameUpdateAndRender GameUpdateAndRender_
 
-internal Win32GameLib Win32LoadGameDLL() 
+inline FILETIME Win32GetLastWrite(char* file_name) 
 {
-    CopyFileA("../build/newgame.dll", "../build/newgame_tmp.dll", FALSE);
+    FILETIME last_write = {};
+
+    WIN32_FIND_DATA find_data;
+    HANDLE find_handle = FindFirstFileA(file_name, &find_data);
+    if (find_handle != INVALID_HANDLE_VALUE) {
+        last_write = find_data.ftLastWriteTime;
+        FindClose(find_handle);
+    }
+
+    return(last_write);
+}
+
+internal Win32GameLib Win32LoadGameDLL(char* file_name) 
+{
     Win32GameLib game_lib = {};
+
+    char* temp_dll = "../build/newgame_tmp.dll";
+
+    game_lib.last_write_time = Win32GetLastWrite(file_name);
+
+    CopyFileA(file_name, temp_dll, FALSE);
     game_lib.dll_handle = LoadLibrary("newgame_tmp.dll");
     if (game_lib.dll_handle) {
        GameUpdateAndRender = (game_update_loop*)GetProcAddress(game_lib.dll_handle, "GameUpdateAndRender");
@@ -204,7 +225,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     bool granularized_sleep = (timeBeginPeriod(scheduler_ms) == TIMERR_NOERROR);
 
     Win32LoadXInput();
-    Win32GameLib game_dll_result = Win32LoadGameDLL();
+
+    char* source_dll = "../build/newgame.dll";
+    Win32GameLib game_dll_result = Win32LoadGameDLL(source_dll);
 
     Win32ResizeDIBSection(&win32_buffer, 1280, 720);
 
@@ -233,8 +256,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
         if (window) {
             HRESULT hr;
             bool program_running = true;
-            // win32_buffer.x_offset = 0;
-            // win32_buffer.y_offset = 0;
 
             // 24/48.
             WAVEFORMATEX format_24_48 = {};
@@ -349,6 +370,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
             game_memory.transient_storage_remaining = game_memory.transient_storage_size;
+            game_memory.next_available = (u64*)game_memory.permanent_storage;
 
             // Services the Platform is providing to the Game.
             PlatformServices services = {};
@@ -362,15 +384,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
             std::vector<AngelInput> inputs;
-            
+            Win32InitInputArray(&inputs);
+
+            Win32InitKeycodeMapping(&game_memory);
+
             int counter = 0;
 
             // bug: this is helpful for now while audio still glitching on Library Load.
             bool test = false;
             while (program_running == true) {
-                if (counter > 60 && test == false) {
+
+                FILETIME new_write_time = Win32GetLastWrite(source_dll);
+                if (CompareFileTime(&new_write_time, &game_dll_result.last_write_time) != 0) {
                     Win32UnloadGameLib(game_dll_result);
-                    game_dll_result = Win32LoadGameDLL();
+                    source_dll = "../build/newgame.dll";
+                    game_dll_result = Win32LoadGameDLL(source_dll);
 
                     test = true;
                     counter = 0;

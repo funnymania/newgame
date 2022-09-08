@@ -27,14 +27,100 @@ internal void Win32LoadXInput(void)
     }
 }
 
-// perf: memory churn from clears.
+inline bool Win32KeyDown(int key)
+{
+    return((GetAsyncKeyState(key) & 0x8000) == 0x8000);
+}
+
+internal void Win32InitInputArray(std::vector<AngelInput>* result) 
+{
+    for (DWORD i = 0; i < XUSER_MAX_COUNT; i += 1) {
+        AngelInput angelic = {};
+        result->push_back(angelic);
+    }
+}
+
+internal inline void Win32ControllerDisconnected(std::vector<AngelInput>* result, DWORD index) 
+{
+    (*result).at(index).stick_1.x = 0;
+    (*result).at(index).stick_1.y = 0;
+
+    (*result).at(index).stick_2.x = 0;
+    (*result).at(index).stick_2.y = 0;
+}
+
+internal inline void Win32ZeroButtonFirstState(std::vector<AngelInput>* result) 
+{
+    for (DWORD i = 0; i < XUSER_MAX_COUNT; i += 1) {
+        (*result).at(i).keys_first_down = 0;
+        (*result).at(i).keys_first_up = 0;
+    }
+}
+
+global_variable List<Win32KeycodeMap> important_keys;
+
+internal inline void Win32InitKeycodeMapping(GameMemory* game_memory)
+{
+    // Initialize it.
+    important_keys = {};
+    important_keys.array = (Win32KeycodeMap*)game_memory->next_available; 
+
+    // Add to it. 
+    AddToList<Win32KeycodeMap>(&important_keys, { 87, KEY_W }, game_memory); // W
+    AddToList<Win32KeycodeMap>(&important_keys, { 65, KEY_A }, game_memory); // A
+    AddToList<Win32KeycodeMap>(&important_keys, { 83, KEY_S }, game_memory); // S
+    AddToList<Win32KeycodeMap>(&important_keys, { 68, KEY_D }, game_memory); // D
+    AddToList<Win32KeycodeMap>(&important_keys, { 76, KEY_L }, game_memory); // L
+    AddToList<Win32KeycodeMap>(&important_keys, { 48, KEY_0 }, game_memory); // 0
+    AddToList<Win32KeycodeMap>(&important_keys, { 49, KEY_1 }, game_memory); 
+    AddToList<Win32KeycodeMap>(&important_keys, { 50, KEY_2 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 51, KEY_3 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 52, KEY_4 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 53, KEY_5 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 54, KEY_6 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 55, KEY_7 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 56, KEY_8 }, game_memory);
+    AddToList<Win32KeycodeMap>(&important_keys, { 57, KEY_9 }, game_memory); // 9
+}
+
+internal inline void Win32ReceiveKeyboardStates(std::vector<AngelInput>* result, DWORD index) 
+{
+    Win32KeycodeMap* tmp = important_keys.array;
+    for (int counter = 0; counter < important_keys.size; counter += 1) {
+        if (tmp->win32_key_code == 76) {
+            int banana = 4;
+        }
+        if (Win32KeyDown(tmp->win32_key_code)) {
+            (*result).at(index).keys |= tmp->game_key_code;
+        } else {
+            (*result).at(index).keys &= tmp->game_key_code ^ 0xFFFFFFFF;
+        }
+
+        if (((*result).at(index).keys & tmp->game_key_code) == tmp->game_key_code
+            && ((*result).at(index).keys_held_down & tmp->game_key_code) == 0) 
+        {
+            (*result).at(index).keys_first_down |= tmp->game_key_code; 
+            (*result).at(index).keys_held_down |= tmp->game_key_code;
+        } 
+        else if (((*result).at(index).keys & tmp->game_key_code) == 0) 
+        {
+            if (((*result).at(index).keys_held_down & tmp->game_key_code) == tmp->game_key_code) {
+                (*result).at(index).keys_held_down &= tmp->game_key_code ^ 0xFFFFFFFF;
+                (*result).at(index).keys_first_up |= tmp->game_key_code;
+            }
+        }
+
+        tmp += 1;
+    }
+}
+
 internal void GetDeviceInputs(std::vector<AngelInput>* result, bool* program_running) 
 {
-    result->clear();
+    // Zero out the buttons' initial down/up states.
+    Win32ZeroButtonFirstState(result);
     std::vector<XINPUT_GAMEPAD> inputs;
     for (DWORD i = 0; i < XUSER_MAX_COUNT; i += 1) {
         XINPUT_STATE device_state;
-        AngelInput angelic = {};
 
         DWORD dwResult = XInputGetState(i, &device_state);
         if (dwResult == ERROR_SUCCESS) {
@@ -50,65 +136,42 @@ internal void GetDeviceInputs(std::vector<AngelInput>* result, bool* program_run
 
             // LR/FB
             if (pad.sThumbLX > STICK_DEADSPACE || pad.sThumbLX < STICK_DEADSPACE * -1) {
-                angelic.stick_1.x = pad.sThumbLX;
+                (*result).at(i).stick_1.x = pad.sThumbLX;
             } else {
-                angelic.stick_1.x = 0;
+                (*result).at(i).stick_1.x = 0;
             }
 
             if (pad.sThumbLY > STICK_DEADSPACE || pad.sThumbLY < STICK_DEADSPACE * -1) {
-                angelic.stick_1.y = pad.sThumbLY;
+                (*result).at(i).stick_1.y = pad.sThumbLY;
             } else {
-                angelic.stick_1.y = 0;
+                (*result).at(i).stick_1.y = 0;
             }
 
             // Z
             if (pad.sThumbRX > STICK_DEADSPACE || pad.sThumbRX < STICK_DEADSPACE * -1) {
-                angelic.stick_2.x = pad.sThumbRX;
+                (*result).at(i).stick_2.x = pad.sThumbRX;
             } else {
-                angelic.stick_2.x = 0;
+                (*result).at(i).stick_2.x = 0;
             }
             if (pad.sThumbRY > STICK_DEADSPACE || pad.sThumbRY < STICK_DEADSPACE * -1) {
-                angelic.stick_2.y = pad.sThumbRY;
+                (*result).at(i).stick_2.y = pad.sThumbRY;
             } else {
-                angelic.stick_2.y = 0;
+                (*result).at(i).stick_2.y = 0;
             }
 
-            angelic.buttons = pad.wButtons;
+            (*result).at(i).buttons = pad.wButtons;
         } else {
-            // Controller is not connected
+            // Controller is not connected, zero its values.
+            Win32ControllerDisconnected(result, i);
         }
 
         // Get keyboard inputs.
-        if (GetAsyncKeyState(87) & 0x01) {
-            // buffer.y_offset += -2;
-            // Pause("Eerie_Town.wav");
-            // Reverse("Eerie_Town.wav");
-            angelic.keys ^= KEY_W;
-        }
-
-        if (GetAsyncKeyState(65) & 0x01) {
-            // buffer.x_offset += 2;
-            // Unpause("Eerie_Town.wav");
-            angelic.keys ^= KEY_A;
-        }
-
-        if (GetAsyncKeyState(83) & 0x01) {
-            // buffer.y_offset += 2;
-            // StopPlaying("Eerie_Town.wav");
-            angelic.keys ^= KEY_S;
-        }
-
-        if (GetAsyncKeyState(68) & 0x01) {
-            // buffer.x_offset += -2;
-            angelic.keys ^= KEY_D;
-        }
+        Win32ReceiveKeyboardStates(result, i);
 
         // Alt + F4
         if (GetAsyncKeyState(VK_MENU) && GetAsyncKeyState(VK_F4)) {
             program_running = false;
         }
-
-        result->push_back(angelic);
     }
 }
 

@@ -15,7 +15,7 @@ static void SwitchArea(char* name, GameMemory* game_memory)
 }
 
 
-static Area LoadArea(char* name, GameMemory* game_memory, PlatformServices services) 
+static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services) 
 {
     Area result = {};
 
