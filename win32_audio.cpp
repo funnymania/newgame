@@ -10,7 +10,6 @@
 
 #include "audio.h"
 #include "newgame.h"
-// #include "asset_table.cpp"
 #include "util.h"
 
 #define REFTIMES_PER_SEC 10000000
@@ -71,6 +70,7 @@ static void LoadSound(char* file_name, SoundAssetTable** sound_assets, GameMemor
     // Load file into memory. 
     file_read_result media_data;
     PlatformReadEntireFile(file_name, &media_data, game_memory);
+    // game_memory->permanent_storage_remaining -= media_data.data_len;
 
     // todo: parse sample_rate, bits and channels from header data.
     // Assume, as far as audio is concerned, we only accept .WAV.
@@ -310,7 +310,6 @@ static void AssignAudioClient(WAVEFORMATEX format, IAudioClient* audio_client)
 }
 
 // todo: each of these windows calls can return FAILED(hr), which should be taken care of somehow.
-
 static void InitStaticAudioClient(WAVEFORMATEX format) 
 {
     HRESULT hr;

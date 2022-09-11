@@ -56,7 +56,7 @@ static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y
 static void InitGame(GameMemory* game_memory, PlatformServices services) 
 {
     // Init memory which we allocate everything from.
-    game_memory->next_available = (u64*)game_memory->permanent_storage;
+    game_memory->next_available = (u8*)game_memory->permanent_storage;
 
     camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
     game_memory->permanent_storage_remaining -= sizeof(camera);
@@ -167,10 +167,12 @@ inline bool IsKeyFirstUp(u32 key, u32 device_id)
     return((angel_inputs.inputs[device_id].keys_first_up & key) == key);
 }
 
+// study: group as something to reference in developer code.
 static int dev_stage_id;
 static int digit_number = 0;
+static bool paused;
 
-static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs, GameMemory* game_memory,
+internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs, GameMemory* game_memory,
         PlatformServices services) 
 {
     for (int i = 0; i < angel_inputs.open_index; i += 1) {
@@ -204,6 +206,11 @@ static void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> i
                 dev_stage_id = 0;
                 digit_number = 0;
             }
+            bool result = IsKeyFirstUp(KEY_P, i);
+            if (result) {
+                // Pause the game. 
+                paused = !paused;
+            }
         }
 #endif
     }
@@ -220,7 +227,7 @@ extern "C" void ResumeAudio(char* name, PlatformServices services)
 }
 
 extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
-        GameMemory* platform_memory, PlatformServices services)
+        GameMemory* platform_memory, PlatformServices services, bool continue_playing)
 {
     GameMemory* game_memory = platform_memory;
     if (game_memory->initialized == false) {
@@ -235,7 +242,7 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
     // OutputSound();
 
     // study: always be given a buffer for each supported audio type. 
-    if (running_sounds_len == 0) {
+    if (running_sounds_len == 0 && continue_playing == true) {
         SoundAssetTable* sound_ptr = &sound_assets;
         services.load_sound("Eerie_Town.wav", &sound_ptr, game_memory); // Points our SoundAssetTable to the new head.
         
@@ -247,8 +254,12 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
 
     AssignInput(inputs);
     ProcessInputs(buffer, inputs, game_memory, services);
-    weird_gradient_x += (u32)(2 * final_inputs[0].lr->x / 32768);
-    weird_gradient_y += (u32)(2 * final_inputs[0].lr->y / 32768);
+
+    if (paused == false) {
+        weird_gradient_x += (u32)(2 * final_inputs[0].lr->x / 32768);
+        weird_gradient_y += (u32)(2 * final_inputs[0].lr->y / 32768);
+    }
+    
     RenderWeirdGradient(buffer, weird_gradient_x, weird_gradient_y);
 }
 

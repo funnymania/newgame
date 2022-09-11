@@ -1,0 +1,11 @@
+SHIPPING
+
+platform should support:
+- custom app icons (.ICOs or otherwise) should be functional
+- PlatformReadEntireFile will run into garbage when files are accessed by other programs while reading.
+- Replace Vector with List. std::vector<AngelInput> in Win32 code relies on an allocator which is different from that 
+     in the DLL for our game code. 
+- frame dips should not occur. on occasion they do!
+
+game should support:
+- Should be scaling down images written to Main Window's buffer on resizing the Window. Should also not be pausing the game during resize. Rendering, audio, all game code should not really be blocked ever by Window messages or the like.

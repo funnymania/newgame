@@ -14,6 +14,15 @@ static void SwitchArea(char* name, GameMemory* game_memory)
     //       else LoadArea() and then switch
 }
 
+void GameMemoryFree(void* obj_ptr, u32 obj_count, u32 obj_size) 
+{
+    u8* tmp = (u8*)obj_ptr;
+    for (int counter = 0; counter < obj_size * obj_count; counter += 1) 
+    {
+        *tmp = 0;
+    }
+}
+
 
 static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services) 
 {
@@ -33,7 +42,7 @@ static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services)
     cube->tra.pos = { 0, 0, 2 };
 
     result.models[0] = *cube; // Copy.
-    free(cube);
+    GameMemoryFree(cube, 1, sizeof(Obj));
 
     return(result);
 }

@@ -101,7 +101,7 @@ struct GameMemory
     u64 transient_storage_size;
     u64 permanent_storage_remaining;
     u64 transient_storage_remaining;
-    u64* next_available;
+    u8* next_available;
 };
 
 typedef Obj* load_obj(char* file_name, GameMemory* game_memory);

@@ -1,6 +1,9 @@
 #include "audio.h"
 #include "newgame.h"
 
+// perf: Our asset table is:
+// 1.) a linkedlist, slow
+// 2.) using malloc, this is a bug
 static SoundAssetTable* Add(SoundAssetTable* table, AudioAsset asset, GameMemory* game_memory)
 {
     // move to end.

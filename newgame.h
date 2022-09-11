@@ -85,13 +85,15 @@ struct AngelInputArray
 #define KEY_8 4096
 #define KEY_9 8192
 #define KEY_L 16384
+#define KEY_P 32768
 
 struct Win32KeycodeMap {
     i16 win32_key_code; 
     u32 game_key_code;
 };
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory);
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory, 
+        bool continue_playing);
 
 // SOUND.
 void SoundOutput();

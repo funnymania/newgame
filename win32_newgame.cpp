@@ -41,12 +41,12 @@ struct Win32GameLib
 
 // note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
 typedef void game_update_loop(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
-        GameMemory* platform_memory, PlatformServices services);
+        GameMemory* platform_memory, PlatformServices services, bool continue_playing);
 
 // note: basically a 'zero-initialized' function. We need to initialize our pointer below this line to SOMETHING. 
 //       This is that something.
 void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* platform_memory,
-       PlatformServices services) {}
+       PlatformServices services, bool continue_playing) {}
 
 global_variable game_update_loop* GameUpdateAndRender_ = GameUpdateLoopStub;
 #define GameUpdateAndRender GameUpdateAndRender_
@@ -92,6 +92,7 @@ internal void Win32UnloadGameLib(Win32GameLib lib)
 }
 
 global_variable Win32OffscreenBuffer win32_buffer;
+global_variable bool program_running = true;
 
 internal win32_window_dimensions GetWindowDimension(HWND window) 
 {
@@ -125,16 +126,15 @@ internal void Win32ResizeDIBSection(Win32OffscreenBuffer *screen_buffer, LONG wi
 
     int bitmap_memory_size = screen_buffer->bytes_per_pixel * screen_buffer->width * screen_buffer->height;
     screen_buffer->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
-
-    // study: may need this to avoid a glitchy frame between resizes.
-    // RenderWeirdGradient(screen_buffer, screen_buffer->x_offset, screen_buffer->y_offset);
 }
 
-// note: callled on WM_PAINT.
 internal void Win32DisplayBufferInWindow(Win32OffscreenBuffer *screen_buffer, 
         HDC DeviceContext, int X, int Y, int width, int height) 
 {
-    StretchDIBits(DeviceContext, 0, 0, width, height, 0, 0, screen_buffer->width, screen_buffer->height, 
+    // note: width and height are the dimensions of the rectangle to paint to.
+    //       screen_buffer->width is the width of the rectangle to paint from.
+    StretchDIBits(DeviceContext, 0, 0, screen_buffer->width, screen_buffer->height, 0, 0, screen_buffer->width, 
+            screen_buffer->height, 
             screen_buffer->memory, &screen_buffer->info, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -150,6 +150,8 @@ LRESULT Win32MainWindowCallback(
     switch(Message) {
         case WM_SIZE: 
         {
+            // study: on resize, game loop is not running, probably because of looping on received messages, 
+            //        a stream of WM_SIZE?
             win32_window_dimensions dimensions = GetWindowDimension(Window);
             Win32ResizeDIBSection(&win32_buffer, dimensions.width, dimensions.height);
         } break;
@@ -157,7 +159,7 @@ LRESULT Win32MainWindowCallback(
         case WM_DESTROY: 
         {
             // study: how to kill the loop in WinMain without a global?
-            // program_running = false;
+            program_running = false;
         } break;
 
         case WM_QUIT: 
@@ -171,12 +173,10 @@ LRESULT Win32MainWindowCallback(
 
         case WM_SYSKEYDOWN:
         {
-            
         } break;
 
         case WM_SYSKEYUP:
         {
-            
         } break;
 
         case WM_KEYDOWN:
@@ -221,6 +221,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 {
     WNDCLASSEXA WindowClass = {};
 
+    // Set sleep time to be settable down to the millisecond.
     u8 scheduler_ms = 1;
     bool granularized_sleep = (timeBeginPeriod(scheduler_ms) == TIMERR_NOERROR);
 
@@ -236,14 +237,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     WindowClass.hInstance = instance;
     WindowClass.lpszClassName = "NewGameWindowClass";
-    // WindowClass.hIcon = instance;
-    // HICON     hIconSm;
-    
-    // note: we can get query somehow, I hope.
-    int monitor_refresh_rate = 60;
-    int game_update_rate = 30;
-    f32 target_seconds_per_frame = 1.0f / game_update_rate;
 
+    // Application icons.
+    // study: we are using some stand-in .ico file that windows seems to understand, but we don't know why.
+    //       What hasn't worked:  -BMP files saved in paint (256 color and 16 bit color, 32 pixels and 48).
+    //                            -Trying to save as ICO in Photoshop (could not get plugin to work)
+    //                            -Renaming BMP and JPG file extensions to ICO.
+    HICON ico = (HICON)LoadImageA(0, "app_icon.ico", IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+    HICON ico_small = (HICON)LoadImageA(0, "app_icon.ico", IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+    WindowClass.hIcon = ico;
+    WindowClass.hIconSm = ico_small;
+    
     // Locked in value on OS boot, used for computing framerates.
     LARGE_INTEGER perf_counter_frequency_result;
     QueryPerformanceFrequency(&perf_counter_frequency_result);
@@ -255,7 +259,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
         if (window) {
             HRESULT hr;
-            bool program_running = true;
+            HDC refresh_DC = GetDC(window);
+
+            // Get monitor's refresh rate.
+            int monitor_refresh_rate = 60;
+            int win32_refresh_rate = GetDeviceCaps(refresh_DC, VREFRESH);
+            if (win32_refresh_rate > 1) {
+                monitor_refresh_rate = win32_refresh_rate;
+            }
+
+            f32 game_update_rate = (monitor_refresh_rate / 2.0f);
+            f32 target_seconds_per_frame = 1.0f / game_update_rate;
 
             // 24/48.
             WAVEFORMATEX format_24_48 = {};
@@ -346,8 +360,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 }
             } 
 
-            // Counter for determining time passed, with granularity less than a microsecond.
-            // This is relevant, as our game runs its update loop on the order of milliseconds (16.7 for 60fps).
+            // Counter for determining time passed.
             LARGE_INTEGER last_counter;
             QueryPerformanceCounter(&last_counter);
 
@@ -370,7 +383,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
             game_memory.transient_storage_remaining = game_memory.transient_storage_size;
-            game_memory.next_available = (u64*)game_memory.permanent_storage;
+            game_memory.next_available = (u8*)game_memory.permanent_storage;
+
+            Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
             // Services the Platform is providing to the Game.
             PlatformServices services = {};
@@ -381,29 +396,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             services.pause_audio = Pause;
             services.resume_audio = Unpause;
 
-            Assert(game_memory.permanent_storage_size >= Megabytes(64));
-
             std::vector<AngelInput> inputs;
             Win32InitInputArray(&inputs);
-
             Win32InitKeycodeMapping(&game_memory);
 
             int counter = 0;
+            bool continue_playing = true;
 
-            // bug: this is helpful for now while audio still glitching on Library Load.
-            bool test = false;
             while (program_running == true) {
-
                 FILETIME new_write_time = Win32GetLastWrite(source_dll);
                 if (CompareFileTime(&new_write_time, &game_dll_result.last_write_time) != 0) {
+                    // Reload game code if the DLL has been modified.
+                    continue_playing = false;
                     Win32UnloadGameLib(game_dll_result);
                     source_dll = "../build/newgame.dll";
                     game_dll_result = Win32LoadGameDLL(source_dll);
-
-                    test = true;
-                    counter = 0;
-                } else {
-                    counter += 1;
                 }
                 
                 MSG Message;
@@ -428,12 +435,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 // Get device inputs.
                 GetDeviceInputs(&inputs, &program_running);
 
-                // DLL todos:
-                // - pause execution
-                // - cache the state.
-                // - compile the game code
-                // - bring back the state.
-
                 GameOffscreenBuffer screen_buffer = {};
                 screen_buffer.memory = win32_buffer.memory;
                 screen_buffer.width = win32_buffer.width;
@@ -441,7 +442,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 screen_buffer.bytes_per_pixel = win32_buffer.bytes_per_pixel;
 
                 // Call on game to provide joy.
-                GameUpdateAndRender(&screen_buffer, inputs, &game_memory, services);
+                GameUpdateAndRender(&screen_buffer, inputs, &game_memory, services, continue_playing);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);
@@ -487,7 +488,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", ms_per_frame, 
                         frames_per_second, mz_per_frame);
                 // note: uncomment for some playtime metrics. Currently conflicting with some debugging.
-                // OutputDebugString(buffer_test);
+                OutputDebugString(buffer_test);
 
                 last_counter = end_counter;
                 last_cycle_count = end_cycle_count;

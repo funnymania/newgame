@@ -11,7 +11,16 @@ void PlatformFreeFileMemory(void* memory)
     }
 }
 
-// todo: Will return garbage if file is open by some other program.
+void GameMemoryFree(void* obj_ptr, u32 obj_count, u32 obj_size) 
+{
+    u8* tmp = (u8*)obj_ptr;
+    for (int counter = 0; counter < obj_size * obj_count; counter += 1) 
+    {
+        *tmp = 0;
+    }
+}
+
+// todo: Second VirtualAlloc occurs here, we need to pull from game_memory->next_available.
 void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory) 
 {
     HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
@@ -23,11 +32,13 @@ void PlatformReadEntireFile(char* file_name, file_read_result* file_result, Game
         if (GetFileSizeEx(file_handle, &file_size)) {
             // Assert(file_size.QuadPart <= 0xFFFFFFFF);
             u32 file_size_32 = (u32)file_size.QuadPart;
-            file_result->data = VirtualAlloc(0, file_size_32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE); 
+            // file_result->data = VirtualAlloc(0, file_size_32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE); 
+            file_result->data = game_memory->next_available; 
             if (file_result->data) {
                 if (ReadFile(file_handle, file_result->data, file_size_32, &bytes_read, 0) 
                         && file_size_32 == bytes_read) {
                     file_result->data_len = file_size_32;
+                    game_memory->next_available += file_size_32;
                     game_memory->permanent_storage_remaining -= file_size_32;
                 } else {
                     PlatformFreeFileMemory(file_result->data);
@@ -68,7 +79,7 @@ char_size ReadAlphaNumericUntilWhiteSpace(char* start, char* eof)
     }
 
     // Copy the strings.
-    char* str_result = (char*)malloc(8 * size);
+    char* str_result = (char*)malloc(size + 1);
     char* tmp_result = str_result;
     tmp_start = start;
     for (int i = 0; i < size; i += 1) {
@@ -76,6 +87,8 @@ char_size ReadAlphaNumericUntilWhiteSpace(char* start, char* eof)
         tmp_result += 1;
         tmp_start += 1;
     }
+
+    *tmp_result = 0;
 
     res.ptr = str_result;
     res.size = size;
@@ -87,7 +100,10 @@ char_size ReadAlphaNumericUntilWhiteSpace(char* start, char* eof)
 //       in the file in which they occur.
 Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
 {
-    Obj* new_model = (Obj*)malloc(sizeof(Obj));
+    Obj* new_model = (Obj*)game_memory->next_available;
+    game_memory->permanent_storage_remaining -= sizeof(Obj);
+    game_memory->next_available += sizeof(Obj);
+
     file_read_result mem = {};
 
     PlatformReadEntireFile(file_name, &mem, game_memory);
@@ -333,9 +349,21 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
             current_line += 1;
         }
 
-        new_model->triangles = tris.data();
+        // Free OBJ filedata, we won't be needing that.
+        GameMemoryFree(mem.data, mem.data_len, 1);
+        game_memory->permanent_storage_remaining += mem.data_len;
+        game_memory->next_available -= mem.data_len;
+
+        // We need to do a data copy from tri vector to triangles.
+        new_model->triangles = (Tri*)game_memory->next_available;
+        memcpy(new_model->triangles, tris.data(), tris.size() * sizeof(Tri));
+        game_memory->permanent_storage_remaining -= tris.size() * sizeof(Tri);
+        game_memory->next_available += tris.size() * sizeof(Tri);
+        
+        // new_model->triangles = tris.data();
         new_model->triangles_len = tris.size();
-        PlatformFreeFileMemory(mem.data);
+
+        // PlatformFreeFileMemory(mem.data);
     }
 
     return(new_model);

@@ -71,6 +71,7 @@ internal inline void Win32InitKeycodeMapping(GameMemory* game_memory)
     AddToList<Win32KeycodeMap>(&important_keys, { 83, KEY_S }, game_memory); // S
     AddToList<Win32KeycodeMap>(&important_keys, { 68, KEY_D }, game_memory); // D
     AddToList<Win32KeycodeMap>(&important_keys, { 76, KEY_L }, game_memory); // L
+    AddToList<Win32KeycodeMap>(&important_keys, { 80, KEY_P }, game_memory); // L
     AddToList<Win32KeycodeMap>(&important_keys, { 48, KEY_0 }, game_memory); // 0
     AddToList<Win32KeycodeMap>(&important_keys, { 49, KEY_1 }, game_memory); 
     AddToList<Win32KeycodeMap>(&important_keys, { 50, KEY_2 }, game_memory);
@@ -87,9 +88,6 @@ internal inline void Win32ReceiveKeyboardStates(std::vector<AngelInput>* result,
 {
     Win32KeycodeMap* tmp = important_keys.array;
     for (int counter = 0; counter < important_keys.size; counter += 1) {
-        if (tmp->win32_key_code == 76) {
-            int banana = 4;
-        }
         if (Win32KeyDown(tmp->win32_key_code)) {
             (*result).at(index).keys |= tmp->game_key_code;
         } else {
