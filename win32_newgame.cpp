@@ -463,6 +463,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     while (seconds_elapsed_per_frame < target_seconds_per_frame) {
                         if (granularized_sleep) {
                             DWORD ms_to_sleep = (DWORD)(1000 * (target_seconds_per_frame - seconds_elapsed_per_frame));
+
+                            // note: DWORD is an int, so ms_to_sleep is often just getting rounded to 0.
+                            //       Sleep(0) will "relinquish the rest of this thread's time slice", which I 
+                            //       don't know what that means...
                             Sleep(ms_to_sleep);
                         }
 
@@ -479,15 +483,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 end_counter = Win32GetWallclock();
                 counter_elapsed = end_counter.QuadPart - last_counter.QuadPart;
 
-                i64 ms_per_frame = 1000 * counter_elapsed / perf_counter_frequency;
+                f64 ms_per_frame = 1000.0f * counter_elapsed / perf_counter_frequency;
                 i32 mz_per_frame = (i32)(cycles_elapsed / 1000 / 1000);
 
                 char buffer_test[256];
 
-                i64 frames_per_second = 1000 / ms_per_frame;
-                wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", ms_per_frame, 
-                        frames_per_second, mz_per_frame);
-                // note: uncomment for some playtime metrics. Currently conflicting with some debugging.
+                f64 frames_per_second = 1000 / ms_per_frame;
+
+                // note: We are avoiding CRT usage, this funtion only supports floats.
+                wsprintf(buffer_test, "Framerate: %dms - %dFPS - %d million cycles\n", (int)ms_per_frame, 
+                        (int)frames_per_second, mz_per_frame);
+
                 OutputDebugString(buffer_test);
 
                 last_counter = end_counter;

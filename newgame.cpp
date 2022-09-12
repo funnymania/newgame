@@ -29,23 +29,39 @@ static Area current_area;
 static int weird_gradient_x = 0;
 static int weird_gradient_y = 0;
 
-static void RenderWeirdGradient(GameOffscreenBuffer *buffer, int x_offset, int y_offset) 
+// static void RenderBare(GameOffscreenBuffer *buffer, int x_offset, int y_offset) 
+// {
+//     for (int y = 0; y < 750; y += 1) {
+//         int banana1 = 8;
+//         for (int x = 0; x < 1424; x += 1) {
+//             int banana = 8;
+//         }
+//     }
+// }
+// 
+// static void DoNothing(int t, int o) 
+// {
+//     for (int y = 0; y < 750; y += 1) {
+//         int banana1 = 8;
+//         for (int x = 0; x < 1424; x += 1) {
+//             int banana = 8;
+//         }
+//     }
+// }
+
+static void RenderWeirdGradient(GameOffscreenBuffer *buffer, i32 x_offset, i32 y_offset) 
 {
     int pitch = buffer->width * buffer->bytes_per_pixel;
     u8 *row = (u8 *)buffer->memory; 
-    for (int y = 0; y < buffer->height; y += 1) {
-        u8 *pixel = (u8 *)row;
-        for (int x = 0; x < buffer->width; x += 1) {
-            *pixel = (u8)(x - x_offset);
-            ++pixel;
+    for (i32 y = 0; y < buffer->height; y += 1) {
+        u32 *pixel = (u32*)row;
+        for (i32 x = 0; x < buffer->width; x += 1) {
+            i32 value = x + x_offset;
+            value = value << 8;
+            value += y - y_offset;
 
-            *pixel = (u8)(y + y_offset);
-            pixel += 1;
+            *pixel = value;
 
-            *pixel = (u8)0;
-            pixel += 1;
-
-            *pixel = (u8)0;
             pixel += 1;
         }
 
@@ -256,10 +272,12 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
     ProcessInputs(buffer, inputs, game_memory, services);
 
     if (paused == false) {
-        weird_gradient_x += (u32)(2 * final_inputs[0].lr->x / 32768);
-        weird_gradient_y += (u32)(2 * final_inputs[0].lr->y / 32768);
+        weird_gradient_x += (i32)(2 * final_inputs[0].lr->x / 32768);
+        weird_gradient_y += (i32)(2 * final_inputs[0].lr->y / 32768);
     }
     
+    // perf: FPS bottleneck is here! This seems to chiefly be related to number of loop iterations, as the trivially
+    //       simple, non-mutating RenderBare (and DoNothing, too) is equally as much of a bottleneck.
     RenderWeirdGradient(buffer, weird_gradient_x, weird_gradient_y);
 }
 
