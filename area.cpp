@@ -20,7 +20,36 @@ void GameMemoryFree(void* obj_ptr, u32 obj_count, u32 obj_size)
     for (int counter = 0; counter < obj_size * obj_count; counter += 1) 
     {
         *tmp = 0;
+        tmp += 1;
     }
+}
+
+struct LevelResults
+{
+    InterpolatedPattern path;
+};
+
+static LevelResults results;
+
+void Setup(GameMemory* game_memory) 
+{
+    results = {};
+
+    // path.
+    List<v4i64> path = {};
+    AddToList<v4i64>(&path, { 0,0,0,0 }, game_memory);
+    AddToList<v4i64>(&path, { -300,0,400,59 }, game_memory);
+    AddToList<v4i64>(&path, { -100,0,0,179 }, game_memory);
+    AddToList<v4i64>(&path, {  400,0,300,299 }, game_memory);
+
+    results.path = InterpolatedPattern::Create(path, game_memory);
+
+    GameMemoryFree(path.array, 4, sizeof(v4i64)); 
+}
+
+LevelResults* ExecuteLevel() 
+{
+    return(&results); 
 }
 
 static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services, DoubleInterpolatedPattern* rumbles) 
@@ -43,6 +72,8 @@ static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services,
 
     result.models[0] = *cube; // Copy.
     GameMemoryFree(cube, 1, sizeof(Obj));
+
+    Setup(game_memory);
 
     return(result);
 }

@@ -17,6 +17,7 @@ void GameMemoryFree(void* obj_ptr, u32 obj_count, u32 obj_size)
     for (int counter = 0; counter < obj_size * obj_count; counter += 1) 
     {
         *tmp = 0;
+        tmp += 1;
     }
 }
 
@@ -352,7 +353,7 @@ Obj* LoadOBJToMemory(char* file_name, GameMemory* game_memory)
         // Free OBJ filedata, we won't be needing that.
         GameMemoryFree(mem.data, mem.data_len, 1);
         game_memory->permanent_storage_remaining += mem.data_len;
-        game_memory->next_available -= mem.data_len;
+        // game_memory->next_available -= mem.data_len;
 
         // We need to do a data copy from tri vector to triangles.
         new_model->triangles = (Tri*)game_memory->next_available;

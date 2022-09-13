@@ -8,5 +8,6 @@ template <typename T> struct List
 };
 
 template <typename T> void AddToList(List<T> list, T new_t, GameMemory* memory);
+template <typename T> T* Get(List<T> list, u64 index);
 
 #endif

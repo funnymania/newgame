@@ -59,6 +59,22 @@ struct v3_float_64
     f64 z;
 };
 
+struct v4 
+{
+    u64 x;
+    u64 y;
+    u64 z;
+    u64 t;
+};
+
+struct v4i64
+{
+    i64 x;
+    i64 y;
+    i64 z;
+    i64 t;
+};
+
 struct Tri 
 {
     v3_float verts[3];
