@@ -23,23 +23,23 @@ void GameMemoryFree(void* obj_ptr, u32 obj_count, u32 obj_size)
     }
 }
 
-
-static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services) 
+static Area LoadArea(int id, GameMemory* game_memory, PlatformServices services, DoubleInterpolatedPattern* rumbles) 
 {
     Area result = {};
 
-    // study: come to a decision on in-game loading of assets, THEN build the developer LevelSwapping around that.
-    // Load area.
-    //
-    // these files will be read to once, and then written to often (or maybe just written to on some timer... )
-    
-    // Assuming this involves cube.obj in the following position.
-    // todo: develop loading schemes.
     // Load models into memory. 
     Obj* cube = services.load_obj("cube.obj", game_memory);
 
     // move the cube.
     cube->tra.pos = { 0, 0, 2 };
+
+    // example of how to set rumble.
+    // note: services.rumble_controller is expected to be called each frame.
+    // f32 first_arr[3][2] = {{0, 0}, {20000, 29}, {0, 59}};
+    // Sequence_f32 first = Sequence_f32::Create(first_arr, 3, game_memory);
+    // Sequence_f32 second = Sequence_f32::Create(first_arr, 3, game_memory);
+    // rumbles[0] = DoubleInterpolatedPattern::Create(first, second);
+    // services.rumble_controller(0, rumbles);
 
     result.models[0] = *cube; // Copy.
     GameMemoryFree(cube, 1, sizeof(Obj));

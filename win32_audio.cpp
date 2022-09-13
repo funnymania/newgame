@@ -451,9 +451,6 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
             // How much buffer space is available now?
             hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
 
-            char padding_string[128];
-            wsprintf(padding_string, "%d\n", padding_frames_count);
-            OutputDebugString(padding_string);
             if (hr == AUDCLNT_E_DEVICE_INVALIDATED) {
                 // Device disconnect.
                 hr = stream->audio_client->Stop();
@@ -467,67 +464,61 @@ static DWORD WINAPI PlayStaticAudio(LPVOID param)
             }
 
             used_frames = stream->buffer_frame_count - padding_frames_count;
-            // sound->buffer_frames_available = sound->frames_per_buffer - padding_frames_count;
-
-            if (padding_frames_count > 38000) {
-                int banana = 6;
-                banana = 8;
-            }
 
             // Get buffer..
             // 0x88890006 means 'AUDCLNT_E_BUFFER_TOO_LARGE'
             // 0x88890007 means 'AUDCLNT_E_OUT_OF_ORDER' 
             hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
 
-            if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
-                int counter= 0;
-                while (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
-                    hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                    used_frames = stream->buffer_frame_count - padding_frames_count;
-                    hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-                    counter += 1;
-                }
+            // if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
+            //     int counter= 0;
+            //     while (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
+            //         hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //         used_frames = stream->buffer_frame_count - padding_frames_count;
+            //         hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            //         counter += 1;
+            //     }
 
-                if (hr != S_OK) {
-                    continue;
-                }
-            }
-            else if (hr == AUDCLNT_E_BUFFER_ERROR) {
-                hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                used_frames = stream->buffer_frame_count - padding_frames_count;
-                hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
-            else if (hr == AUDCLNT_E_BUFFER_SIZE_ERROR) {
-                hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                used_frames = stream->buffer_frame_count - padding_frames_count;
-                hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
-            else if (hr == AUDCLNT_E_OUT_OF_ORDER) {
-                continue;
-                // hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                // used_frames = stream->buffer_frame_count - padding_frames_count;
-                // hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
-            else if (hr == AUDCLNT_E_DEVICE_INVALIDATED) {
-                hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                used_frames = stream->buffer_frame_count - padding_frames_count;
-                hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
-            else if (hr == AUDCLNT_E_BUFFER_OPERATION_PENDING) {
-                hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                used_frames = stream->buffer_frame_count - padding_frames_count;
-                hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
-            else if (hr == AUDCLNT_E_SERVICE_NOT_RUNNING) {
-                hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                used_frames = stream->buffer_frame_count - padding_frames_count;
-                hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
-            else if (hr == E_POINTER) {
-                hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
-                used_frames = stream->buffer_frame_count - padding_frames_count;
-                hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
-            }
+            //     if (hr != S_OK) {
+            //         continue;
+            //     }
+            // }
+            // else if (hr == AUDCLNT_E_BUFFER_ERROR) {
+            //     hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
+            // else if (hr == AUDCLNT_E_BUFFER_SIZE_ERROR) {
+            //     hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
+            // else if (hr == AUDCLNT_E_OUT_OF_ORDER) {
+            //     continue;
+            //     // hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     // used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     // hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
+            // else if (hr == AUDCLNT_E_DEVICE_INVALIDATED) {
+            //     hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
+            // else if (hr == AUDCLNT_E_BUFFER_OPERATION_PENDING) {
+            //     hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
+            // else if (hr == AUDCLNT_E_SERVICE_NOT_RUNNING) {
+            //     hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
+            // else if (hr == E_POINTER) {
+            //     hr = stream->audio_client->GetCurrentPadding(&padding_frames_count);
+            //     used_frames = stream->buffer_frame_count - padding_frames_count;
+            //     hr = stream->render_client->GetBuffer(used_frames, &stream->buffer);
+            // }
 
             // study: might need to just use used_frames, as this might be == buffer_frame_count when we are out of
             //        data.

@@ -41,12 +41,12 @@ struct Win32GameLib
 
 // note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
 typedef void game_update_loop(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
-        GameMemory* platform_memory, PlatformServices services, bool continue_playing);
+        GameMemory* platform_memory, PlatformServices services);
 
 // note: basically a 'zero-initialized' function. We need to initialize our pointer below this line to SOMETHING. 
 //       This is that something.
 void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* platform_memory,
-       PlatformServices services, bool continue_playing) {}
+       PlatformServices services) {}
 
 global_variable game_update_loop* GameUpdateAndRender_ = GameUpdateLoopStub;
 #define GameUpdateAndRender GameUpdateAndRender_
@@ -390,7 +390,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             // Services the Platform is providing to the Game.
             PlatformServices services = {};
             services.load_obj = LoadOBJToMemory;
-            services.persona_handshake = Persona4Handshake;
+            services.rumble_controller = RumbleController;
             services.load_sound = LoadSound;
             services.start_playing = StartPlaying;
             services.pause_audio = Pause;
@@ -401,13 +401,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             Win32InitKeycodeMapping(&game_memory);
 
             int counter = 0;
-            bool continue_playing = true;
-
             while (program_running == true) {
                 FILETIME new_write_time = Win32GetLastWrite(source_dll);
                 if (CompareFileTime(&new_write_time, &game_dll_result.last_write_time) != 0) {
                     // Reload game code if the DLL has been modified.
-                    continue_playing = false;
                     Win32UnloadGameLib(game_dll_result);
                     source_dll = "../build/newgame.dll";
                     game_dll_result = Win32LoadGameDLL(source_dll);
@@ -442,7 +439,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 screen_buffer.bytes_per_pixel = win32_buffer.bytes_per_pixel;
 
                 // Call on game to provide joy.
-                GameUpdateAndRender(&screen_buffer, inputs, &game_memory, services, continue_playing);
+                GameUpdateAndRender(&screen_buffer, inputs, &game_memory, services);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);

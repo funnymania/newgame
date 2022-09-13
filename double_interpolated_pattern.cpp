@@ -4,8 +4,10 @@ DoubleInterpolatedPattern DoubleInterpolatedPattern::Create(Sequence_f32 sequenc
 {
     DoubleInterpolatedPattern result = {};
 
+    result.length = 60;
+
     // init to -1.
-    for (int i = 0; i < 60; i += 1) {
+    for (int i = 0; i < result.length; i += 1) {
         result.value[i] = -1;
         result.value_2[i] = -1;
     }

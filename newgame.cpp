@@ -7,7 +7,6 @@
 #include "double_interpolated_pattern.cpp"
 #include "geometry_m.h"
 #include "area.cpp"
-
 #include "newgame.h"
 #include "platform_services.h"
 
@@ -22,34 +21,14 @@ static AngelInputArray angel_inputs = {};
 // Object for dual-motor rumbling.
 static DoubleInterpolatedPattern rumble_patterns[MAX_DEVICES] = {};
 
-static Camera camera;
-
 static Area current_area;
 
 static int weird_gradient_x = 0;
 static int weird_gradient_y = 0;
 
-// static void RenderBare(GameOffscreenBuffer *buffer, int x_offset, int y_offset) 
-// {
-//     for (int y = 0; y < 750; y += 1) {
-//         int banana1 = 8;
-//         for (int x = 0; x < 1424; x += 1) {
-//             int banana = 8;
-//         }
-//     }
-// }
-// 
-// static void DoNothing(int t, int o) 
-// {
-//     for (int y = 0; y < 750; y += 1) {
-//         int banana1 = 8;
-//         for (int x = 0; x < 1424; x += 1) {
-//             int banana = 8;
-//         }
-//     }
-// }
-
-static void RenderWeirdGradient(GameOffscreenBuffer *buffer, i32 x_offset, i32 y_offset) 
+// perf: frame drops go away when compiler option -Og (or its super-set -O2) are declared.
+//       this is doing loop optimization, and perhaps some more things. 
+static void Render(GameOffscreenBuffer *buffer, i32 x_offset, i32 y_offset) 
 {
     int pitch = buffer->width * buffer->bytes_per_pixel;
     u8 *row = (u8 *)buffer->memory; 
@@ -69,33 +48,12 @@ static void RenderWeirdGradient(GameOffscreenBuffer *buffer, i32 x_offset, i32 y
     }
 }
 
-static void InitGame(GameMemory* game_memory, PlatformServices services) 
+// note: angel_inputs and final_inputs are global.
+static void SetDefaultInputs(std::vector<AngelInput> inputs)
 {
-    // Init memory which we allocate everything from.
-    game_memory->next_available = (u8*)game_memory->permanent_storage;
-
-    camera = { {0, 0, 0}, {0, 0, 1}, 0.5 };
-    game_memory->permanent_storage_remaining -= sizeof(camera);
-    game_memory->next_available += sizeof(camera);
-
-    current_area = LoadArea(0, game_memory, services);
-
-    // Persona4 style rumbling.
-    f32 first_arr[3][2] = {{0,0}, {20000,30}, {0,60}};
-    Sequence_f32 first = Sequence_f32::Create(first_arr, 3, game_memory);
-    Sequence_f32 second = Sequence_f32::Create(first_arr, 3, game_memory);
-
-    rumble_patterns[0] = DoubleInterpolatedPattern::Create(first, second);
-
-    game_memory->initialized = true;
-}
-
-static void AssignInput(std::vector<AngelInput> inputs) 
-{
-    for (int i = angel_inputs.open_index; i < inputs.size(); i += 1) {
+    for (int i = 0; i < inputs.size(); i += 1) {
         AngelInput new_angel = inputs.at(i);
         angel_inputs.inputs[i] = new_angel; // Copy.
-        angel_inputs.open_index += 1;
 
         // Default values for final_input.
         Input new_in;
@@ -104,16 +62,17 @@ static void AssignInput(std::vector<AngelInput> inputs)
         new_in.interact_mask = 8;
         final_inputs[i] = new_in;
     }
+
+    angel_inputs.next_available_index = (u32)inputs.size();
 }
 
-static void ConfigScreen() 
+static void InitGame(GameMemory* game_memory, PlatformServices services, std::vector<AngelInput> inputs) 
 {
-    // move around.... interact with an input field.
-    // toggle some button/stick. 
-    //       whatever I see positive input from, this is what is being pointed to by that field.
-    //       Ex. select move left-right field, use the Dpad, I will assign the memory address there
-    //           to be what is used for moving left-right for you.
-    // option to reset to default.
+    // Start from initial area. 
+    current_area = LoadArea(0, game_memory, services, &rumble_patterns[0]);
+
+    SetDefaultInputs(inputs);
+    game_memory->initialized = true;
 }
 
 static int NumberKeyFirstDown(int bitflag) 
@@ -122,41 +81,23 @@ static int NumberKeyFirstDown(int bitflag)
 
     if (bitflag & KEY_0) {
         result = 0;
-    }
-    else if (bitflag & KEY_1) {
-
+    } else if (bitflag & KEY_1) {
         result = 1;
-    }
-    else if (bitflag & KEY_2) {
-
+    } else if (bitflag & KEY_2) {
         result = 2;
-    }
-    else if (bitflag & KEY_3) {
-
+    } else if (bitflag & KEY_3) {
         result = 3;
-    }
-    else if (bitflag & KEY_4) {
-
+    } else if (bitflag & KEY_4) {
         result = 4;
-    }
-    else if (bitflag & KEY_5) {
-
+    } else if (bitflag & KEY_5) {
         result = 5;
-    }
-    else if (bitflag & KEY_6) {
-
+    } else if (bitflag & KEY_6) {
         result = 6;
-    }
-    else if (bitflag & KEY_7) {
-
+    } else if (bitflag & KEY_7) {
         result = 7;
-    }
-    else if (bitflag & KEY_8) {
-
+    } else if (bitflag & KEY_8) {
         result = 8;
-    }
-    else if (bitflag & KEY_9) {
-
+    } else if (bitflag & KEY_9) {
         result = 9;
     }
 
@@ -191,7 +132,7 @@ static bool paused;
 internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs, GameMemory* game_memory,
         PlatformServices services) 
 {
-    for (int i = 0; i < angel_inputs.open_index; i += 1) {
+    for (int i = 0; i < angel_inputs.next_available_index; i += 1) {
         angel_inputs.inputs[i].stick_1 = inputs[i].stick_1;
         angel_inputs.inputs[i].stick_2 = inputs[i].stick_2;
         angel_inputs.inputs[i].keys = inputs[i].keys;
@@ -218,7 +159,7 @@ internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput>
                     digit_number += 1;
                 }
             } else if (IsKeyFirstUp(KEY_L, i)) {
-                LoadArea(dev_stage_id, game_memory, services);
+                LoadArea(dev_stage_id, game_memory, services, &rumble_patterns[0]);
                 dev_stage_id = 0;
                 digit_number = 0;
             }
@@ -232,6 +173,41 @@ internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput>
     }
 }
 
+// note: To play a song. Loads the song if it is not yet loaded. 
+void PlayASong(char* name, GameMemory* game_memory, PlatformServices services) 
+{
+    SoundAssetTable* sound_ptr = &sound_assets;
+    services.load_sound("Eerie_Town.wav", &sound_ptr, game_memory); // Points our SoundAssetTable to the new head.
+    
+    services.start_playing("Eerie_Town.wav", &sound_assets, game_memory);
+}
+
+// note: to rumble controllers, pass a pointer to the pattern. Pattern will be mutated platform side, so make sure 
+//       to send the same pattern data whenever you need to continue rumbling. 
+void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern, PlatformServices services)
+{
+    services.rumble_controller(device_index, pattern);
+}
+
+extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
+        GameMemory* platform_memory, PlatformServices services)
+{
+    GameMemory* game_memory = platform_memory;
+    if (game_memory->initialized == false) {
+       InitGame(game_memory, services, inputs);
+    }
+
+    ProcessInputs(buffer, inputs, game_memory, services);
+
+    // note: everything in here is what we want to be pausable.
+    if (paused == false) {
+        weird_gradient_x += (i32)(2 * final_inputs[0].lr->x / 32768);
+        weird_gradient_y += (i32)(2 * final_inputs[0].lr->y / 32768);
+    }
+    
+    Render(buffer, weird_gradient_x, weird_gradient_y);
+}
+
 extern "C" void PauseAudio(char* name, PlatformServices services) 
 {
     services.pause_audio(name, &sound_assets);
@@ -242,44 +218,6 @@ extern "C" void ResumeAudio(char* name, PlatformServices services)
     services.resume_audio(name, &sound_assets);
 }
 
-extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
-        GameMemory* platform_memory, PlatformServices services, bool continue_playing)
-{
-    GameMemory* game_memory = platform_memory;
-    if (game_memory->initialized == false) {
-       InitGame(game_memory, services);
-    }
-
-    if (rumble_patterns[0].current_time <= 59) {
-        services.persona_handshake(&rumble_patterns[0]);
-    }
-
-    // study: should perhaps be running more often than renderer.
-    // OutputSound();
-
-    // study: always be given a buffer for each supported audio type. 
-    if (running_sounds_len == 0 && continue_playing == true) {
-        SoundAssetTable* sound_ptr = &sound_assets;
-        services.load_sound("Eerie_Town.wav", &sound_ptr, game_memory); // Points our SoundAssetTable to the new head.
-        
-        // AudioMessage play_sound = { PLAY, audio };
-        services.start_playing("Eerie_Town.wav", &sound_assets, game_memory);
-
-        running_sounds_len += 1;
-    } 
-
-    AssignInput(inputs);
-    ProcessInputs(buffer, inputs, game_memory, services);
-
-    if (paused == false) {
-        weird_gradient_x += (i32)(2 * final_inputs[0].lr->x / 32768);
-        weird_gradient_y += (i32)(2 * final_inputs[0].lr->y / 32768);
-    }
-    
-    // perf: FPS bottleneck is here! This seems to chiefly be related to number of loop iterations, as the trivially
-    //       simple, non-mutating RenderBare (and DoNothing, too) is equally as much of a bottleneck.
-    RenderWeirdGradient(buffer, weird_gradient_x, weird_gradient_y);
-}
 
 enum AudioCode 
 {

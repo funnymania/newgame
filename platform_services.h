@@ -4,7 +4,7 @@
 struct PlatformServices
 {
     load_obj* load_obj;    
-    persona_handshake* persona_handshake;    
+    rumble_controller* rumble_controller;    
     load_sound* load_sound;    
     start_playing* start_playing;    
     pause_audio_game* pause_audio;

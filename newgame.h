@@ -50,7 +50,7 @@ struct AngelInput
 struct AngelInputArray 
 {
     AngelInput inputs[MAX_DEVICES];
-    u32 open_index; // either an index never assigned, or in a full array of inputs, the most recently cleared index.
+    u32 next_available_index; // either an index never assigned, or in a full array of inputs, the most recently cleared index.
 };
 
 // Gamepads.
@@ -88,12 +88,11 @@ struct AngelInputArray
 #define KEY_P 32768
 
 struct Win32KeycodeMap {
-    i16 win32_key_code; 
+    i32 win32_key_code; 
     u32 game_key_code;
 };
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory, 
-        bool continue_playing);
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory);
 
 // SOUND.
 void SoundOutput();

@@ -29,7 +29,7 @@ internal void Win32LoadXInput(void)
 
 inline bool Win32KeyDown(int key)
 {
-    return((GetAsyncKeyState(key) & 0x8000) == 0x8000);
+    return(((GetAsyncKeyState(key) & 0x8000) == 0x8000));
 }
 
 internal void Win32InitInputArray(std::vector<AngelInput>* result) 
@@ -174,10 +174,14 @@ internal void GetDeviceInputs(std::vector<AngelInput>* result, bool* program_run
     }
 }
 
-void Persona4Handshake(DoubleInterpolatedPattern* pattern) 
+void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern) 
 {
     XINPUT_VIBRATION vibration;
     ZeroMemory(&vibration, sizeof(XINPUT_VIBRATION));
+
+    if (pattern->current_time >= pattern->length) {
+        return;
+    }
 
     // 0-65535, lo motor
     vibration.wLeftMotorSpeed = (WORD)pattern->value[pattern->current_time];
@@ -185,6 +189,6 @@ void Persona4Handshake(DoubleInterpolatedPattern* pattern)
 
     pattern->current_time += 1;
 
-    // vibration.wRightMotorSpeed = 16000;  // 0-65535, hi motor
-    XInputSetState(0, &vibration);
+    XInputSetState(device_index, &vibration);
 }
+    
