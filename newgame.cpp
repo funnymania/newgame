@@ -34,18 +34,17 @@ static i64 weird_gradient_z = 0;
 static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset) 
 {
     // idea: 256 is z=0. z = -256 would be 0 pixels wide. z = 256 would be 512
-
     int pitch = buffer->width * buffer->bytes_per_pixel;
     u8 *row = (u8 *)buffer->memory; 
     for (i32 y = 0; y < buffer->height; y += 1) {
         u32 *pixel = (u32*)row;
         for (i32 x = 0; x < buffer->width; x += 1) {
-            i32 g = (i32)(z_offset + 256);
+            i32 g = (i32)(z_offset / GRID_SIZE + 256);
             f32 gf = 256.0f / g; 
 
-            i32 value = (i32)((x + x_offset) * gf);
+            i32 value = (i32)((x + x_offset / GRID_SIZE) * gf);
             value = value << 8;
-            value += (i32)((y - y_offset) * gf);
+            value += (i32)((y - y_offset / GRID_SIZE) * gf);
 
             *pixel = value;
 
@@ -208,14 +207,12 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
     ProcessInputs(buffer, inputs, game_memory, services);
     LevelResults* demo = ExecuteLevel();
 
-    // note: everything in here is what we want to be pausable.
     if (paused == false) {
-        weird_gradient_x = Get(demo->path.values, demo->path.current_time)->x;
-        weird_gradient_y = Get(demo->path.values, demo->path.current_time)->y;
-        weird_gradient_z = Get(demo->path.values, demo->path.current_time)->z;
-
-        // demo pattern being overwritten on every iteration of loop
+        // note: everything in here is what we want to be pausable.
         if (demo->path.current_time < demo->path.length) {
+            weird_gradient_x = Get(demo->path.values, demo->path.current_time)->x;
+            weird_gradient_y = Get(demo->path.values, demo->path.current_time)->y;
+            weird_gradient_z = Get(demo->path.values, demo->path.current_time)->z;
             demo->path.current_time += 1;
         }
     }

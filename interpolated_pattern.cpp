@@ -29,12 +29,12 @@ InterpolatedPattern InterpolatedPattern::Create(List<v4i64> in_pattern, GameMemo
         
         for (i64 j = current_value.t; j < next_value.t; j += 1) {
             *seek_result = {
-                current_value.x + ((next_value.x - current_value.x) 
-                        / (next_value.t - current_value.t) * (j - current_value.t)),
-                current_value.y + ((next_value.y - current_value.y) 
-                        / (next_value.t - current_value.t) * (j - current_value.t)),
-                current_value.z + ((next_value.z - current_value.z) 
-                        / (next_value.t - current_value.t) * (j - current_value.t))
+                current_value.x + ((next_value.x - current_value.x) / (next_value.t - current_value.t)) 
+                    * (j - current_value.t),
+                current_value.y + ((next_value.y - current_value.y) / (next_value.t - current_value.t)) 
+                    * (j - current_value.t),
+                current_value.z + ((next_value.z - current_value.z) / (next_value.t - current_value.t)) 
+                    * (j - current_value.t)
             };
 
             seek_result += 1;

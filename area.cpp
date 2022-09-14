@@ -1,5 +1,10 @@
 #include "platform_services.h"
 
+#define GRID_SIZE 32768
+
+#define POINT4_i64(x, y, z, t) \
+    { (x) * (GRID_SIZE), (y) * (GRID_SIZE), (z) * (GRID_SIZE), t }
+
 // Contains Assets which are loaded, stored in Area files.
 struct Area 
 {
@@ -37,10 +42,12 @@ void Setup(GameMemory* game_memory)
 
     // path.
     List<v4i64> path = {};
-    AddToList<v4i64>(&path, { 0,0,0,0 }, game_memory);
-    AddToList<v4i64>(&path, { -300,0,400,59 }, game_memory);
-    AddToList<v4i64>(&path, { -100,0,0,179 }, game_memory);
-    AddToList<v4i64>(&path, {  400,0,300,299 }, game_memory);
+    AddToList<v4i64>(&path, POINT4_i64(0, 0, 0, 0), game_memory);
+    AddToList<v4i64>(&path, POINT4_i64(0, 0, 125, 75), game_memory);
+    AddToList<v4i64>(&path, POINT4_i64(0, 100, 150, 90), game_memory);
+    AddToList<v4i64>(&path, POINT4_i64(0, 0, 175, 105), game_memory);
+    AddToList<v4i64>(&path, POINT4_i64(0, 0, 750, 450), game_memory);
+    AddToList<v4i64>(&path, POINT4_i64(0, 0, 1000, 600), game_memory);
 
     results.path = InterpolatedPattern::Create(path, game_memory);
 
