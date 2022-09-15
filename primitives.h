@@ -45,6 +45,13 @@ struct v3
     u64 z;
 };
 
+struct v3i64
+{
+    i64 x;
+    i64 y;
+    i64 z;
+};
+
 struct v3_float 
 {
     f32 x;

@@ -33,7 +33,8 @@ static i64 weird_gradient_z = 0;
 //       this is doing loop optimization, and perhaps some more things. 
 static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset) 
 {
-    // idea: 256 is z=0. z = -256 would be 0 pixels wide. z = 256 would be 512
+    u64 sphere_radius = buffer->width;
+
     int pitch = buffer->width * buffer->bytes_per_pixel;
     u8 *row = (u8 *)buffer->memory; 
     for (i32 y = 0; y < buffer->height; y += 1) {
@@ -42,9 +43,30 @@ static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 
             i32 g = (i32)(z_offset / GRID_SIZE + 256);
             f32 gf = 256.0f / g; 
 
-            i32 value = (i32)((x + x_offset / GRID_SIZE) * gf);
+            i64 rect_x_sq = x * x;
+            i64 rect_y_sq = y * y;
+            i64 rect_z_sq = sphere_radius * sphere_radius;
+
+            // Get the vector between 0 and {x,y,sphere_radius}.
+            // v3i64 rect_vector = {x, y, sphere_radius};
+
+            i64 distance_rect = rect_x_sq + rect_y_sq + rect_z_sq;
+
+            // note: flipping this places us on the outside of the sphere, and not the inside.
+            f64 distance_to_sphere = (f64)rect_z_sq / distance_rect;
+
+            // note: normalizing the rectangle vector and multiplying it by sphere radius.
+            //       math is there, we are accounting away the square roots.
+            v3i64 sphere_vector = {
+                (i64)(rect_x_sq * distance_to_sphere),
+                (i64)(rect_y_sq * distance_to_sphere),
+                (i64)(rect_z_sq * distance_to_sphere),
+            };
+
+            // instead of x/y moving '1', they will be moving 
+            i32 value = (i32)((x + (x_offset / GRID_SIZE)) * sphere_vector.x * gf);
             value = value << 8;
-            value += (i32)((y - y_offset / GRID_SIZE) * gf);
+            value += (i32)((y - (y_offset / GRID_SIZE)) * sphere_vector.y * gf);
 
             *pixel = value;
 
