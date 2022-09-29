@@ -6,14 +6,14 @@
 //       Developer's monitor is 144 frames per second.
 struct InterpolatedPattern
 {
-    List<v4i64> values;
+    SimpList<v4i64> values;
     u16 current_time;
     u16 length;
                       
     InterpolatedPattern() {}
 
     // note: sequence must always specific a starting and ending value.
-    static InterpolatedPattern Create(List<v4i64> values, GameMemory* game_memory);
+    static InterpolatedPattern Create(SimpList<v4i64> values, GameMemory* game_memory);
 };
 
 #endif

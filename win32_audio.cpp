@@ -68,8 +68,8 @@ static void LoadSound(char* file_name, SoundAssetTable** sound_assets, GameMemor
     strcpy(new_sound.name, file_name);
 
     // Load file into memory. 
-    file_read_result media_data;
-    PlatformReadEntireFile(file_name, &media_data, game_memory);
+    FileReadResult media_data;
+    PlatformReadEntireFile(file_name, &media_data);
     // game_memory->permanent_storage_remaining -= media_data.data_len;
 
     // todo: parse sample_rate, bits and channels from header data.
@@ -241,7 +241,7 @@ static SoundPlayResult Unpause(char* name, SoundAssetTable* sound_assets)
 
 void WriteToAudioObjectBuffer(FLOAT* buffer, UINT frameCount, FLOAT frequency, UINT samplingRate)
 {
-    const double PI = 4 * atan2(1.0, 1.0);
+    // const double PI = 4 * atan2(1.0, 1.0);
     static double _radPhase = 0.0;
 
     double step = 2 * PI * frequency / samplingRate;

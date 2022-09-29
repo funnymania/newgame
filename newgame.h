@@ -3,7 +3,7 @@
 
 // note: services that the platform provides to the game.
 #if NEWGAME_INTERNAL
-void PlatformReadEntireFile(char* file_name, file_read_result* file_result, GameMemory* game_memory);
+void PlatformReadEntireFile(char* file_name, FileReadResult* file_result);
 void PlatformFreeFileMemory(void* memory);
 bool PlatformWriteEntireFile(char* file_name, u32 data_size, void* data);
 #endif
@@ -29,8 +29,8 @@ SoundPlayResult StartPlaying(char* name);
 // INPUT.
 struct Input
 {
-    v2_i64* lr;  // 2D input, X is left and right, Y is forward and back.
-    v2_i64* z;   // 2D input, X is undefined, Y is up and down.
+    v2i64* lr;  // 2D input, X is left and right, Y is forward and back.
+    v2i64* z;   // 2D input, X is undefined, Y is up and down.
     u16 interact_mask;   // Example: if `2`, this means that we AND AngelInput's buttons with 2 to get the result.
 };
 
@@ -38,8 +38,8 @@ struct Input
 // control.
 struct AngelInput
 {
-    v2_i64 stick_1;
-    v2_i64 stick_2;
+    v2i64 stick_1;
+    v2i64 stick_2;
     u16 buttons;
     u16 keys;
     u16 keys_first_down;
@@ -92,7 +92,7 @@ struct Win32KeycodeMap {
     u32 game_key_code;
 };
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory);
+static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory, f32 seconds_per_frame);
 
 // SOUND.
 void SoundOutput();

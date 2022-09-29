@@ -1,13 +1,14 @@
 #include "interpolated_pattern.h"
 
-InterpolatedPattern InterpolatedPattern::Create(List<v4i64> in_pattern, GameMemory* game_memory) 
+InterpolatedPattern InterpolatedPattern::Create(SimpList<v4i64> in_pattern, GameMemory* game_memory) 
 {
     InterpolatedPattern result = {};
     result.current_time = 0;
     result.values.array = (v4i64*)game_memory->next_available;
 
     v4i64* seek = in_pattern.array;
-    seek += in_pattern.size - 1;
+
+    seek += in_pattern.length - 1;
     result.length = (u16)((*seek).t + 1);
 
     // Initialize list.
@@ -20,9 +21,14 @@ InterpolatedPattern InterpolatedPattern::Create(List<v4i64> in_pattern, GameMemo
         game_memory->permanent_storage_remaining -= sizeof(v4i64);
     }
 
+    // bug: vales seem to be off by one, so we are just moving up by one to account.
+    //      this is more a 'hack' than a bug, but we think of hacks as bugs.
+    game_memory->next_available += sizeof(v4i64);
+    game_memory->permanent_storage_remaining -= sizeof(v4i64);
+
     seek = in_pattern.array;
     seek_result = result.values.array;
-    for (i64 i = 0; i < in_pattern.size - 1; i += 1) {
+    for (i64 i = 0; i < in_pattern.length - 1; i += 1) {
         // Compute the full values.
         v4i64 current_value = *seek;
         v4i64 next_value = *(seek + 1);

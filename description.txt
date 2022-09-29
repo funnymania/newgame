@@ -1,0 +1,61 @@
+General Overview of Render Loop:
+
+# Starting with an unordered list of objects (3D objects) in memory... 
+
+- First, "morph" some object's vertices if they are marked for distortion*.
+
+- Second, rotate the objects' vertices according to some unit vector representing the axis of some rotation**. 
+
+- Third, determine the order in which to draw all these triangles. This is a little hairy, as triangles can be 
+    oriented any which way, and can puncture eachother. This means that if a triangle's edge overlaps with any part of 
+    another triangle, you need to split up that overlapped triangle so that you can properly draw the other triangle on 
+    top of it. This is better explained via a drawing. 
+    this produces some extra memory to worry about, what with the extra triangles***.
+
+- Fourth, for each pixel, determine whether some triangle is intersecting with a line shot out some distance from
+    that pixel. So this is 1920 * 1080 intersection queries * number of triangles which is at least sorted based
+    on distance. 
+
+general notes: this has only been tested with cubes at different orientations. as we test out new shapes, and need
+    rendering to be faster, these details are going to change a lot. And then yes, of course we will end up working
+    with a GPU for speedups. 
+
+
+*: 
+    Currently, we support a spherical distortion in which an object's vertices are altered as though they were plotted  
+    along the surface of a sphere of some radius, the radius is the z-distance from that vertex to some observer. 
+    hard to describe, it is similar to the effect of a fish eye lens, just on a per object basis, and bowls inward
+    as opposed to outward (so as though you were looking at something on the inside of a sphere, not outside)
+
+**:
+    I am treating (0,0,1) as the default rotation value. I was thinking about the problem and couldn't figure out how
+    to represent it effectively, but I figured out I could represent any rotation by some circle and a scalar to determine where along
+    the edge of the circle it ends up. Which is basically a line and an angle. I can explain
+    this in detail later, but if you need to rotate some vertex, this is the same as moving the vertex along the surface of a
+    sphere whose radius is the distance of that vertex from some value, chosen as (0, 0, 0).  
+    this value of which is what you would use for
+    every vertex in the object, which allows the points to rotate about the same "center". 
+    all vertices are stored as just offsets from this value in OBJ files, so there         
+    isn't any work to do here besides calculate distance from (0,0,0). Assuming a 3d object's vertices do not differ 
+    in distance ever from the object's "center", you can try to cache this distance value for each vertex and avoid all the 
+    inverse square roots.
+    Given this understanding, a rotation can be described as moving a vertex from one location on the surface of a sphere with a center of (0,0,0) 
+    to another. if you take some 3rd value, let's say just (0, 0, 0), then you have a triangle which defines a plane. The surface
+    normal of that plane is the axis of rotation, and you just need to find out the angle between one edge of the triangle
+    (default_rotation_value - (0,0,0)) to the other (next_rotation_value - (0,0,0)). Since you know the length
+    of each side of this triangle, you use the law of cosines to determine this angle. 
+    Then, you use Rogrigues's formula to calculate the new position of the vertex, since you have the axis of rotation, and the angle
+    with which to rotate along it.
+    https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
+    
+    I was really happy to discover that this approach of understanding rotations as the "difference" between one
+    vector and another was at least a working model. I did not derive Rodrigues/Euler's math myself, but it does work in limited 
+    testing.
+
+***: 
+    I am doing manual memory management, but so far everything is basically a stack, and I make sure all lists are 
+    stored in memory contiguously. I am also, except in specific cases, not currently going back in the stack to re-allocate memory freed, so the
+    stack pointer only moves forward.
+
+
+couple notes: memory is managed manually

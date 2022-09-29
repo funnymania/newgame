@@ -32,10 +32,22 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 
-struct v2_i64
+struct v2i64
 {
     i64 x;
     i64 y;
+};
+
+struct v2f64
+{
+    f64 x;
+    f64 y;
+};
+
+struct u64_f64
+{
+    u64 x;
+    f64 y;
 };
 
 struct v3 
@@ -59,7 +71,7 @@ struct v3_float
     f32 z;
 };
 
-struct v3_float_64
+struct v3f64
 {
     f64 x;
     f64 y;
@@ -82,16 +94,36 @@ struct v4i64
     i64 t;
 };
 
-struct Tri 
+// study: can we support greater color resolution? genuinely curious!
+struct Color 
 {
-    v3_float verts[3];
-    v3_float normals[3];
+    u8 red;
+    u8 green;
+    u8 blue;
+    u8 a;
 };
 
-struct Ray 
+struct TriangleRefVertices 
 {
-    v3 begin;
-    v3 end;
+    v3f64* verts[3];
+    v3f64 normals[3];
+};
+
+struct Tri 
+{
+    v3f64 verts[3];
+};
+
+struct TriColorNoRef
+{
+    Tri triangle;
+    Color color;
+};
+
+struct Line 
+{
+    v3f64 x;
+    v3f64 y;
 };
 
 struct Transform 
@@ -127,7 +159,7 @@ struct GameMemory
     u8* next_available;
 };
 
-typedef Obj* load_obj(char* file_name, GameMemory* game_memory);
+static void AdjustMemory(u64 size, u64 number, GameMemory* game_memory, void** to_allocate);
 
 struct Pair_u16 
 {
@@ -168,7 +200,7 @@ struct SoundPlayResult
     u32 response;  // either 0 for error, or 1 for success.
 };
 
-struct file_read_result {
+struct FileReadResult {
     void* data;
     u32 data_len;
 };

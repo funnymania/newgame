@@ -6,6 +6,7 @@
 
 #include "primitives.h"
 #include "list.cpp"
+#include "game_state.cpp"
 #include "sequence.cpp"
 #include "double_interpolated_pattern.cpp"
 #include "geometry_m.h"
@@ -41,12 +42,12 @@ struct Win32GameLib
 
 // note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
 typedef void game_update_loop(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
-        GameMemory* platform_memory, PlatformServices services);
+        GameState* game_state, GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame);
 
 // note: basically a 'zero-initialized' function. We need to initialize our pointer below this line to SOMETHING. 
 //       This is that something.
-void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* platform_memory,
-       PlatformServices services) {}
+void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state, 
+        GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame) {}
 
 global_variable game_update_loop* GameUpdateAndRender_ = GameUpdateLoopStub;
 #define GameUpdateAndRender GameUpdateAndRender_
@@ -385,11 +386,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             game_memory.transient_storage_remaining = game_memory.transient_storage_size;
             game_memory.next_available = (u8*)game_memory.permanent_storage;
 
+            GameState game_state = {};
+
             Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
             // Services the Platform is providing to the Game.
             PlatformServices services = {};
-            services.load_obj = LoadOBJToMemory;
+            services.read_file = PlatformReadEntireFile;
+            services.free_file_memory = PlatformFreeFileMemory;
             services.rumble_controller = RumbleController;
             services.load_sound = LoadSound;
             services.start_playing = StartPlaying;
@@ -439,7 +443,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                 screen_buffer.bytes_per_pixel = win32_buffer.bytes_per_pixel;
 
                 // Call on game to provide joy.
-                GameUpdateAndRender(&screen_buffer, inputs, &game_memory, services);
+                GameUpdateAndRender(&screen_buffer, inputs, &game_state, &game_memory, services, 
+                        target_seconds_per_frame);
 
                 HDC device_context = GetDC(window);
                 win32_window_dimensions client_rect = GetWindowDimension(window);

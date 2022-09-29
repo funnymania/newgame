@@ -57,7 +57,7 @@ internal inline void Win32ZeroButtonFirstState(std::vector<AngelInput>* result)
     }
 }
 
-global_variable List<Win32KeycodeMap> important_keys;
+global_variable SimpList<Win32KeycodeMap> important_keys;
 
 internal inline void Win32InitKeycodeMapping(GameMemory* game_memory)
 {
@@ -87,7 +87,7 @@ internal inline void Win32InitKeycodeMapping(GameMemory* game_memory)
 internal inline void Win32ReceiveKeyboardStates(std::vector<AngelInput>* result, DWORD index) 
 {
     Win32KeycodeMap* tmp = important_keys.array;
-    for (int counter = 0; counter < important_keys.size; counter += 1) {
+    for (int counter = 0; counter < important_keys.length; counter += 1) {
         if (Win32KeyDown(tmp->win32_key_code)) {
             (*result).at(index).keys |= tmp->game_key_code;
         } else {
