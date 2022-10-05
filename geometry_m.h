@@ -19,6 +19,8 @@ struct Polyhedron
     MorphStatus morph_status;
     Color color;
     SimpList<v3f64> vertices;
+    SimpList<v3f64> normals;
+    SimpList<v2f64> uvs;
     SimpList<TriangleRefVertices> triangles;
 };
 

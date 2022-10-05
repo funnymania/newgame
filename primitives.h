@@ -106,7 +106,8 @@ struct Color
 struct TriangleRefVertices 
 {
     v3f64* verts[3];
-    v3f64 normals[3];
+    v3f64* normals[3];
+    v2f64* uvs[3];
 };
 
 struct Tri 
@@ -150,8 +151,8 @@ struct Camera
 struct GameMemory 
 {
     bool initialized;
-    void* permanent_storage;
-    void* transient_storage;
+    void* permanent_storage; // Memory which persists from frame to frame.
+    void* transient_storage; // note: not being used, unclear as to what this should be used for.
     u64 permanent_storage_size;
     u64 transient_storage_size;
     u64 permanent_storage_remaining;

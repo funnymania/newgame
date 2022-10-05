@@ -10,7 +10,6 @@
 // Contains Assets which are loaded, stored in Area files.
 struct Area 
 {
-    // todo: grab memory and assign it, we need something like a growable array.
     SimpList<Polyhedron> friendlies; 
 };
 
@@ -125,7 +124,6 @@ char_size ReadAlphaNumericUntilWhiteSpace(char* start, char* eof)
 
 // note: Triangle vertices are represented by 1-indexed (not 0-indexed) numbers, which correspond to the line
 //       in the file in which they occur.
-// todo: Must return a Polyhedron (or perhaps something which contains a Polyhedron)
 Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, PlatformServices services)
 {
     Polyhedron new_model = {};
@@ -134,11 +132,6 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
     char* ptr = (char*)mem.data;
     char* eof = ptr + mem.data_len;
 
-    // todo: convert this to SimpList.
-    std::vector<v3f64> uvs;
-    std::vector<v3f64> normals;
-    std::vector<TriangleRefVertices> tris;
-
     int current_line = 0;
     while (ptr != 0) {
 
@@ -146,7 +139,7 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
         if (*ptr == 'v' && *(ptr + 1) == 't')  {
             ptr += 3;
             int counter = 1;
-            v3f64 uv = {};
+            v2f64 uv = {};
             while (counter < 3) {
                 // read everything in until white space.
                 char_size num = ReadAlphaNumericUntilWhiteSpace(ptr, eof);
@@ -181,7 +174,7 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                 free(num.ptr);
             }
 
-            uvs.push_back(uv);
+            AddToList<v2f64>(&new_model.uvs, uv, game_memory);
         }
 
         // Are first two characters vn?
@@ -199,13 +192,9 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                     continue;
                 }
 
-                // char* num_copy = strdup(num.ptr);
                 char* str_end = num.ptr + num.size;
                 float conversion_result = std::strtof(num.ptr, &str_end);
 
-                // free(num_copy);
-
-                // todo: error handling.
                 if (str_end != num.ptr) {
                     if (counter == 1) {
                         uv.x = conversion_result;
@@ -225,7 +214,7 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                 free(num.ptr);
             }
 
-            normals.push_back(uv);
+            AddToList<v3f64>(&new_model.normals, uv, game_memory);
         }
 
         // Is first character v?
@@ -243,13 +232,9 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                     continue;
                 }
 
-                // char* num_copy = strdup(num.ptr);
                 char* str_end = num.ptr + num.size;
                 float conversion_result = std::strtof(num.ptr, &str_end);
 
-                // free(num_copy);
-
-                // todo: error handling.
                 if (str_end != num.ptr) {
                     if (counter == 1) {
                         uv.x = conversion_result;
@@ -297,7 +282,7 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                             tri.verts[counter - 1] = new_model.vertices.array + index - 1;
                         }
                         if (vert_num_counter == 2) {
-                            // todo: UV.
+                            tri.uvs[counter - 1] = new_model.uvs.array + index - 1;
                         }
 
                         vert_num_counter += 1;
@@ -316,7 +301,7 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                     //       is pointing at two numbers, instead of a number followed by whitespace.
                     //       So, instead of '5 ', the ptr is at '58' which is now being read as an index of
                     //       '58' instead of just '5.
-                    tri.normals[counter - 1] = normals.at(index - 1);
+                    tri.normals[counter - 1] = new_model.normals.array + index - 1;
 
                     // if (counter == 1) {
                     //     tri.one_normal = normals.at(index - 1); 
@@ -334,7 +319,7 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
                 free(num.ptr);
             }
 
-            tris.push_back(tri);
+            AddToList<TriangleRefVertices>(&new_model.triangles, tri, game_memory);
         }
 
         // Move ptr until line over!
@@ -367,11 +352,11 @@ Polyhedron LoadOBJToMemory(FileReadResult mem, GameMemory* game_memory, Platform
     // game_memory->next_available -= mem.data_len;
 
     // We need to do a data copy for what we care about.
-    new_model.triangles = {};
-    AdjustMemory(sizeof(TriangleRefVertices), tris.size(), game_memory, (void**)&(new_model.triangles.array));
-    new_model.triangles.length = tris.size();
+    // new_model.triangles = {};
+    // AdjustMemory(sizeof(TriangleRefVertices), new_model.triangles.length, game_memory, 
+    //         (void**)&(new_model.triangles.array));
 
-    memcpy(new_model.triangles.array, tris.data(), tris.size() * sizeof(TriangleRefVertices));
+    // memcpy(new_model.triangles.array, tris.data(), tris.size() * sizeof(TriangleRefVertices));
 
     // new_model.vertices = {};
     // AdjustMemory(sizeof(v3f64), verts.size(), game_memory, (void**)&(new_model.vertices.array));
@@ -387,7 +372,7 @@ static Area LoadArea(int id, GameState* game_state, GameMemory* game_memory, Pla
     Area result = {};
 
     // Load models into memory.
-    // todo: do not load anything into memory which is already loaded.
+    // study: how to load and store levels to and from memory.
     FileReadResult file_result = {};
     Polyhedron cube = {};
 

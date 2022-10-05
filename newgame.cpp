@@ -179,7 +179,7 @@ static v3f64 RenderSpherically(i64 sphere_radius, v3f64 point, i64 z_offset)
 
     f64 distance_rect_squareroot = Q_rsqrt((f32)(rect_x_sq + rect_y_sq + rect_z_sq));
 
-    // todo: should be FASTER than above, but produces a sort of visual seam.
+    // study: this should be FASTER than above, but produces a sort of visual seam.
     // f64* distance_rect_squareroot = Get(sqrt_table, x + y);
 
     v3f64 unit_rect_squared = {
@@ -258,14 +258,15 @@ static Line FindLineOfIntersection(Tri tri, Tri to_plane)
     return(result);
 }
 
-/// Are these points co-linear?
+//todo: incomplete.
 static bool IsColinear(v3f64 one, v3f64 two, v3f64 three) 
 {
     return(0);
 }
 
-// todo: rename this, it is returning all new triangles created from splitting the first argument.
-static SimpList<Tri> IntersectionOfTwoTriangles(Tri to_split, Tri test) 
+/// Split to_split into multiple triangles if test overlaps one of its lines. Splitting is along the line of 
+/// intersection.
+static SimpList<Tri> SplitTrianglesIfOverlap(Tri to_split, Tri test) 
 {
     SimpList<Tri> new_triangles = {};
 
@@ -438,7 +439,7 @@ static SimpList<Tri_Color> OrderVerts(SimpList<Polyhedron> polys, v3f64 observer
                     two.verts[1] = *(polys.array[c].triangles.array[d].verts[1]);
                     two.verts[2] = *(polys.array[c].triangles.array[d].verts[2]);
 
-                    SimpList<Tri> triangles = IntersectionOfTwoTriangles(one, two);
+                    SimpList<Tri> triangles = SplitTrianglesIfOverlap(one, two);
 
                     // note: this may necessitate some hairy situation, putting all these new triangles bisected back
                     //       into the triangles list because they may themselves be bisected by something else, and
@@ -616,14 +617,16 @@ static Color TriangleContainingPixel(SimpList<Tri_Color> tris, i32 pixel_x, i32 
 
 // perf: frame drops go away when compiler option -Og (or its super-set -O2) are declared.
 //       this is doing loop optimization, and perhaps some more things. 
-// todo: the ability to "look" at something is important. the ability to put something at the center of my viewing
-//       space is important.
+// perf: single threaded. can distribute the load.
+// study: how to "look" at something.
 static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset, SimpList<Tri_Color> tris, 
         v3f64 observer_normal) 
 {
     i32 zoom = (i32)(z_offset / GRID_SIZE + 256);
     f32 zoom_apply = 256.0f / zoom;
-    zoom_apply = 1;
+
+    // zoom_apply = 1;
+
     f64 scale = 256;
 
     // for each pixel ask, does any triangle contain this pixel? start from the front of the list of tris which
@@ -734,10 +737,10 @@ static v3f64 NormalizedVector(v3f64 vector)
 static void AssembleDrawableRect(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset, 
        SimpList<Polyhedron> polyhedra, GameMemory* game_memory)
 {
-    v3f64 rotation_default = { 0, 0, 1 };
+    v3f64 rotation_default = { 0, 1, 0 };
 
     // note: normal cube should now have one of its edges facing us.
-    v3f64 world_rotation_now = NormalizedVector({ 0, 0, 1 }); 
+    v3f64 world_rotation_now = NormalizedVector({ 1, 0, 0 }); 
 
     // Distort all polyhedra marked for distortion.
     SimpList<Polyhedron> morphed_polys = MorphPolyhedra(polyhedra, game_memory);
@@ -780,21 +783,6 @@ static void SetDefaultInputs(std::vector<AngelInput> inputs)
     }
 
     angel_inputs.next_available_index = (u32)inputs.size();
-}
-
-static void InitGame(GameState* game_state, GameMemory* game_memory, PlatformServices services,  
-        std::vector<AngelInput> inputs, GameOffscreenBuffer* buffer) 
-{
-    // Generate some constant value lookup tables.
-    GenerateSqrtTable(buffer->width, buffer->height, buffer->width, game_memory); 
-
-    // Load from initial area. 
-    current_area = LoadArea(0, game_state, game_memory, services, &rumble_patterns[0]);
-
-    auto_save_timer = 0;
-
-    SetDefaultInputs(inputs);
-    game_memory->initialized = true;
 }
 
 static int NumberKeyFirstDown(int bitflag) 
@@ -914,8 +902,8 @@ void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern, Plat
 {
     services.rumble_controller(device_index, pattern);
 }
-
-void CalculateNextFrame(GameState* game_state) 
+ 
+static void CalculateNextFrame(GameState* game_state) 
 {
     if (game_state->current_path.current_time < game_state->current_path.length) {
         view_move_x = Get(game_state->current_path.values, game_state->current_path.current_time)->x;
@@ -925,6 +913,21 @@ void CalculateNextFrame(GameState* game_state)
         // note: unit of time is frames, not milliseconds.
         game_state->current_path.current_time += 1;
     }
+}
+
+static void InitGame(GameState* game_state, GameMemory* game_memory, PlatformServices services,  
+        std::vector<AngelInput> inputs, GameOffscreenBuffer* buffer) 
+{
+    // Generate some constant value lookup tables.
+    GenerateSqrtTable(buffer->width, buffer->height, buffer->width, game_memory); 
+
+    // Load from initial area. 
+    current_area = LoadArea(0, game_state, game_memory, services, &rumble_patterns[0]);
+
+    auto_save_timer = 0;
+
+    SetDefaultInputs(inputs);
+    game_memory->initialized = true;
 }
 
 extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
@@ -941,16 +944,16 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
         // note: everything in here is what we want to be pausable.
 
         // todo: There exist a list of patterns occurring at any one time. 
-        //       One example is game_state->current_path. Another will be every object undergoing some change over time.
+        //       One example is game_state->current_path. Another will be every object undergoing some change over 
+        //       time.
         //       We should group all of these changes over time so that we can apply some meaningful translations, etc,
         //       before rendering.
-        CalculateNextFrame(game_state);
     }
 
-    // study: casey remarks.
-    // study: Change render weird gradient, white/yellow patterns.
-    // todo: Lighting. 
+    CalculateNextFrame(game_state);
 
+    // study: casey remarks. how to make renderer faster!
+    // study: Change render weird gradient, white/yellow patterns.
     AssembleDrawableRect(buffer, view_move_x, view_move_y, view_move_z, current_area.friendlies, game_memory);
 }
 

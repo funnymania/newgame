@@ -367,6 +367,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             i64 last_cycle_count = __rdtsc();
 
+            // note: this is VERY helpful for debugging. if we need to check what's going on in memory over and over,
+            //       this will assure that the space in memory where this is occurring can be consistent, which means
+            //       in our debugger we don't always need to constantly copy the memory address allocated for some 
+            //       variable
+            //       and go to the new place in memory everytime on running the executable, it will always be offset
+            //       from the same base address. Less helpful after a lot of random allocations have happened, more
+            //       helpful when you can jump straight to some game state and audit memory (if memory allocations can 
+            //       be guaranteed to be deterministic).
 #if NEWGAME_INTERNAL
             LPVOID base_address = (LPVOID)Terabytes((u64)2);
 #else
@@ -414,6 +422,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
                     game_dll_result = Win32LoadGameDLL(source_dll);
                 }
                 
+                // note: windows has unqueued and queued messages. Unqueued messages are received via PeekMessage,
+                //       this is like WM_ACTIVATE. Most messages we care about are queued, which we are removing via
+                //       PM_REMOVE. These are actually processed in the Win32MainWindowCallback function, which 
+                //       happens via DispatchMessage. It is possible via PeekMessage to not remove the message from
+                //       the queue if something else might be expecting it (check docs).
                 MSG Message;
                 while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE)) {
                     if (Message.message == WM_QUIT) {
