@@ -378,6 +378,12 @@ static Area LoadArea(int id, GameState* game_state, GameMemory* game_memory, Pla
 
     services.read_file("cube.obj", &file_result);
 
+    // services.read_file("building1.obj", &file_result);
+    // services.read_file("building2.obj", &file_result);
+    // services.read_file("building3.obj", &file_result);
+    // services.read_file("elevator.obj", &file_result);
+    // services.read_file("elevator.obj", &file_result);
+
     if (file_result.data) {
         cube = LoadOBJToMemory(file_result, game_memory, services);
     }

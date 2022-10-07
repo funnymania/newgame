@@ -251,6 +251,7 @@ static SimpList<Polyhedron> MorphPolyhedra(SimpList<Polyhedron> polyhedra, GameM
     return(result_polys);
 }
 
+//todo: incomplete.
 static Line FindLineOfIntersection(Tri tri, Tri to_plane)
 {
     Line result = {};
@@ -261,6 +262,7 @@ static Line FindLineOfIntersection(Tri tri, Tri to_plane)
 //todo: incomplete.
 static bool IsColinear(v3f64 one, v3f64 two, v3f64 three) 
 {
+        
     return(0);
 }
 
@@ -290,7 +292,6 @@ static SimpList<Tri> SplitTrianglesIfOverlap(Tri to_split, Tri test)
     // the vertex that is in both lines will be the ONE that will be the first triangle.
     // the OTHER TWO vertices will be used with the intersection line as a 4-gon with which
     // to split correctly into two triangles sharing an edge.
-    
     Tri new_tri = {};
     Tri second_tri = {};
     Tri third_tri = {};
@@ -618,6 +619,17 @@ static Color TriangleContainingPixel(SimpList<Tri_Color> tris, i32 pixel_x, i32 
 // perf: frame drops go away when compiler option -Og (or its super-set -O2) are declared.
 //       this is doing loop optimization, and perhaps some more things. 
 // perf: single threaded. can distribute the load.
+// todo: draw everything as one single color (at first). when we have all these triangles to draw, 
+//       does it make sense to keep the triangles sorted? don't keep the triangles sorted for an intersection
+//       test with a pixel-ray. you shouldn't have to do an intersection test for every single pixel...
+//       so the idea was that once you sort and split the triangles correctly, you can just somehow MAP
+//       the triangle data and draw it directly instead of needing millions of raycasts.
+//       lets keep a pixel value that we can use to know whether some triangle has colored a space or not.
+//       draw pixel value directly from the triangle sort? so I am assuming we have a matching function from
+//       a triangle to a pixel. for every single triangle, you should be able to simply draw that triangle
+//       color to "all of its pixels". 
+//       so you DO have to go through every pixel. you know which color was 
+// perf: for polyhedra can just save the rotation values it has so that we don't have to rotate it every frame.
 // study: how to "look" at something.
 static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset, SimpList<Tri_Color> tris, 
         v3f64 observer_normal) 
@@ -629,9 +641,23 @@ static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 
 
     f64 scale = 256;
 
+
+    // todo: Triangles must own a list of pixel_rows.
+    // struct PixelRow { u64 begin; u64 end; };
+    for (i32 index = 0; index < tris.length; index += 1) {
+        for (i32 index2 = 0; index2 < tris.array[index].pixel_row.length; index2 += 1) {
+            for (i32 index3 = tris.array[index].pixel_row[index2].begin; 
+                    index3 < tris.array[index].pixel_row[index2].end; 
+                    index3 += 1) {
+                u8* pixel = buffer->memory + index3;
+                if (*pixel != EMPTY_PIXEL) {
+                    *pixel = tris.array[index].color;
+                }
+        }
+    }
+
     // for each pixel ask, does any triangle contain this pixel? start from the front of the list of tris which
     //      is ordered. if the answer is 'yes', color it with that triangles color, and continue to next pixel.
-
     int pitch = buffer->width * buffer->bytes_per_pixel;
     u8* row = (u8*)buffer->memory;
     for (i32 y = 0; y < buffer->height; y += 1) {
@@ -746,10 +772,10 @@ static void AssembleDrawableRect(GameOffscreenBuffer *buffer, i64 x_offset, i64 
     SimpList<Polyhedron> morphed_polys = MorphPolyhedra(polyhedra, game_memory);
 
     // "Rotating" morphed_polys relative to user_position.
+    // todo: let's try to animate this rotation so that we can KNOW that something here is being done 
+    //       quickly. we can pass an interpolated pattern in, and rotate based upon the values.
+    //       let's also simply stop the ordering of verts and assume we don't care about this for Render().
     RotatePolyhedra(morphed_polys, world_rotation_now, rotation_default);
-
-    // perf: if a triangle is in front of me, and within a certain distance, I will draw it!
-    //       else, i will remove it from morphed_polys....
 
     // research: needs more! Assemble into some draw order.
     //           problems to solve: overlapping triangles. we need to be able to break down some triangle in 
@@ -922,6 +948,7 @@ static void InitGame(GameState* game_state, GameMemory* game_memory, PlatformSer
     GenerateSqrtTable(buffer->width, buffer->height, buffer->width, game_memory); 
 
     // Load from initial area. 
+    // note: we are just putting everything into this one Area for now.
     current_area = LoadArea(0, game_state, game_memory, services, &rumble_patterns[0]);
 
     auto_save_timer = 0;
