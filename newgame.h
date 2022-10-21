@@ -5,7 +5,7 @@
 #if NEWGAME_INTERNAL
 void PlatformReadEntireFile(char* file_name, FileReadResult* file_result);
 void PlatformFreeFileMemory(void* memory);
-bool PlatformWriteEntireFile(char* file_name, u32 data_size, void* data);
+void PlatformWriteEntireFile(char* file_name, u32 data_size, void* data);
 #endif
 
 // study: How to do lookup table given manual memory management.
@@ -13,6 +13,9 @@ struct SoundAssetTable {
     AudioAsset value;
     SoundAssetTable* next;
 };
+
+// note: use to convert between a integer and a character. digit_char_convert[2] is equal to the character "2".
+char digit_char_convert[11] = "0123456789";
 
 typedef void load_sound(char* file_name, SoundAssetTable** sound_assets, GameMemory* game_memory);
 typedef SoundPlayResult start_playing(char* name, SoundAssetTable* sound_assets, GameMemory* game_memory);
@@ -92,7 +95,7 @@ struct Win32KeycodeMap {
     u32 game_key_code;
 };
 
-static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory, f32 seconds_per_frame);
+// static void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameMemory* memory, f32 seconds_per_frame);
 
 // SOUND.
 void SoundOutput();

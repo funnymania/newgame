@@ -4,4 +4,5 @@
 struct GameState 
 {
     InterpolatedPattern current_path;   
+    v3i64 view_move;
 };

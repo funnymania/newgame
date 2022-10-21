@@ -1,7 +1,7 @@
 #ifndef GEOMETRY_M_H
 #define GEOMETRY_M_H
 
-// todo: derive this ourselves!
+// study: Should we dervice this ourselves?
 #define PI 3.14159265358979323846
 
 enum MorphStatus 

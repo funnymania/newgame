@@ -5,6 +5,7 @@
 #include <timeapi.h>
 
 #include "primitives.h"
+#include "memory.cpp"
 #include "list.cpp"
 #include "game_state.cpp"
 #include "sequence.cpp"
@@ -49,8 +50,8 @@ typedef void game_update_loop(GameOffscreenBuffer* buffer, std::vector<AngelInpu
 void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state, 
         GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame) {}
 
-global_variable game_update_loop* GameUpdateAndRender_ = GameUpdateLoopStub;
-#define GameUpdateAndRender GameUpdateAndRender_
+global_variable game_update_loop* GameUpdateAndRender = GameUpdateLoopStub;
+// #define GameUpdateAndRender GameUpdateAndRender_
 
 inline FILETIME Win32GetLastWrite(char* file_name) 
 {
@@ -64,6 +65,17 @@ inline FILETIME Win32GetLastWrite(char* file_name)
     }
 
     return(last_write);
+}
+
+u64 GetNullTerminatedMemoryLength(char* memory)
+{
+    u64 length = 0; 
+    while (*memory != 0) {
+        length += 1;
+        memory += 1;
+    }
+
+    return(length);
 }
 
 internal Win32GameLib Win32LoadGameDLL(char* file_name) 
@@ -258,6 +270,36 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
         HWND window = CreateWindowExA(0, WindowClass.lpszClassName, "Newgame", WS_OVERLAPPEDWINDOW|WS_VISIBLE,
                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
 
+        // Game Memory setup.
+        // note: this is VERY helpful for debugging. if we need to check what's going on in memory over and over,
+        //       this will assure that the space in memory where this is occurring can be consistent, which means
+        //       in our debugger we don't always need to constantly copy the memory address allocated for some 
+        //       variable
+        //       and go to the new place in memory everytime on running the executable, it will always be offset
+        //       from the same base address. Less helpful after a lot of random allocations have happened, more
+        //       helpful when you can jump straight to some game state and audit memory (if memory allocations can 
+        //       be guaranteed to be deterministic).
+#if NEWGAME_INTERNAL
+        LPVOID base_address = (LPVOID)Terabytes((u64)2);
+#else
+        LPVOID base_address = 0;
+#endif
+        GameMemory game_memory = {};
+        game_memory.permanent_storage_size = Megabytes(64);
+        game_memory.transient_storage_size = Gigabytes((u64)4);
+
+        u64 total_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
+
+        game_memory.permanent_storage = VirtualAlloc(base_address, total_size, MEM_COMMIT|MEM_RESERVE,
+                PAGE_READWRITE);
+        game_memory.transient_storage = (u8*)game_memory.permanent_storage + game_memory.permanent_storage_size;
+
+        game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
+        game_memory.transient_storage_remaining = game_memory.transient_storage_size;
+        game_memory.next_available = (u8*)game_memory.permanent_storage;
+
+        Assert(game_memory.permanent_storage_size >= Megabytes(64));
+
         if (window) {
             HRESULT hr;
             HDC refresh_DC = GetDC(window);
@@ -367,36 +409,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             i64 last_cycle_count = __rdtsc();
 
-            // note: this is VERY helpful for debugging. if we need to check what's going on in memory over and over,
-            //       this will assure that the space in memory where this is occurring can be consistent, which means
-            //       in our debugger we don't always need to constantly copy the memory address allocated for some 
-            //       variable
-            //       and go to the new place in memory everytime on running the executable, it will always be offset
-            //       from the same base address. Less helpful after a lot of random allocations have happened, more
-            //       helpful when you can jump straight to some game state and audit memory (if memory allocations can 
-            //       be guaranteed to be deterministic).
-#if NEWGAME_INTERNAL
-            LPVOID base_address = (LPVOID)Terabytes((u64)2);
-#else
-            LPVOID base_address = 0;
-#endif
-            GameMemory game_memory = {};
-            game_memory.permanent_storage_size = Megabytes(64);
-            game_memory.transient_storage_size = Gigabytes((u64)4);
-
-            u64 total_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
-
-            game_memory.permanent_storage = VirtualAlloc(base_address, total_size, MEM_COMMIT|MEM_RESERVE,
-                    PAGE_READWRITE);
-            game_memory.transient_storage = (u8*)game_memory.permanent_storage + game_memory.permanent_storage_size;
-
-            game_memory.permanent_storage_remaining = game_memory.permanent_storage_size;
-            game_memory.transient_storage_remaining = game_memory.transient_storage_size;
-            game_memory.next_available = (u8*)game_memory.permanent_storage;
-
             GameState game_state = {};
-
-            Assert(game_memory.permanent_storage_size >= Megabytes(64));
 
             // Services the Platform is providing to the Game.
             PlatformServices services = {};
@@ -516,13 +529,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             }
         }
         else {
-            //TODO: Logging...
+            char debug_message[64] = " Window Unsuccessfully created";
+            u64 debug_message_len = GetNullTerminatedMemoryLength(debug_message);
+
+            PlatformWriteLineToFile("logs.txt", (u32)debug_message_len, (void*)debug_message, 
+                    FileWriteOptions::TIMESTAMP, &game_memory);
         }
-    } 
+    }
     else {
-        // todo: Log files.
         DWORD error = GetLastError();
-        OutputDebugString("Class Registration failed");
+        // todo: add timestamp to this.
+        PlatformWriteEntireFile("logs.txt", 25, (void*)"Class Registration failed");
     }
 
     // // Reset the stream to free it's resources.

@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "primitives.h"
+#include "memory.cpp"
 #include "list.cpp"
 #include "sequence.cpp"
 #include "double_interpolated_pattern.cpp"
@@ -10,6 +11,7 @@
 #include "game_state.cpp"
 #include "geometry_m.h"
 #include "area.cpp"
+#include "devops_stats.h"
 #include "newgame.h"
 #include "platform_services.h"
 
@@ -23,43 +25,10 @@ static AngelInputArray angel_inputs = {};
 // Object for dual-motor rumbling.
 static DoubleInterpolatedPattern rumble_patterns[MAX_DEVICES] = {};
 
-static Area current_area;
-
 static i64 view_move_x = 0;
 static i64 view_move_y = 0;
 static i64 view_move_z = 0;
 static i64 auto_save_timer;
-
-void ZeroMemory(void* obj_ptr, u64 obj_count, u32 obj_size) 
-{
-    u8* tmp = (u8*)obj_ptr;
-    for (int counter = 0; counter < obj_size * obj_count; counter += 1) 
-    {
-        *tmp = 0;
-        tmp += 1;
-    }
-}
-
-// Moves next_available back or forwards some `offset` amount, zeroing any memory in the offset.
-void ZeroByOffset(u64 size, u32 offset, GameMemory* game_memory) 
-{
-    u64 bytes = size * offset;
-    u8* seek = (u8*)game_memory->next_available;
-    if (bytes < 0) {
-        for (i32 a = 0; a > bytes; a -= 1) {
-            *seek = 0;
-            seek -= 1;
-        }
-    } else {
-        for (i32 a = 0; a < bytes; a += 1) {
-            *seek = 0;
-            seek += 1;
-        }
-    }
-
-    game_memory->next_available += bytes;
-    game_memory->permanent_storage_remaining -= bytes;
-}
 
 // perf: table of squares to cut out multiplications.
 static v2f64 RenderSphericallySquared(i64 radius, i64 x, i64 y) 
@@ -641,20 +610,20 @@ static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 
 
     f64 scale = 256;
 
-
     // todo: Triangles must own a list of pixel_rows.
     // struct PixelRow { u64 begin; u64 end; };
-    for (i32 index = 0; index < tris.length; index += 1) {
-        for (i32 index2 = 0; index2 < tris.array[index].pixel_row.length; index2 += 1) {
-            for (i32 index3 = tris.array[index].pixel_row[index2].begin; 
-                    index3 < tris.array[index].pixel_row[index2].end; 
-                    index3 += 1) {
-                u8* pixel = buffer->memory + index3;
-                if (*pixel != EMPTY_PIXEL) {
-                    *pixel = tris.array[index].color;
-                }
-        }
-    }
+    // for (i32 index = 0; index < tris.length; index += 1) {
+    //     for (i32 index2 = 0; index2 < tris.array[index].pixel_row.length; index2 += 1) {
+    //         for (i32 index3 = tris.array[index].pixel_row[index2].begin; 
+    //                 index3 < tris.array[index].pixel_row[index2].end; 
+    //                 index3 += 1) {
+    //             u8* pixel = buffer->memory + index3;
+    //             if (*pixel != EMPTY_PIXEL) {
+    //                 *pixel = tris.array[index].color;
+    //             }
+    //         }
+    //     }
+    // }
 
     // for each pixel ask, does any triangle contain this pixel? start from the front of the list of tris which
     //      is ordered. if the answer is 'yes', color it with that triangles color, and continue to next pixel.
@@ -761,7 +730,7 @@ static v3f64 NormalizedVector(v3f64 vector)
 }
 
 static void AssembleDrawableRect(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset, 
-       SimpList<Polyhedron> polyhedra, GameMemory* game_memory)
+       SimpList<Polyhedron> polyhedra, GameMemory* game_memory, GameState* game_state)
 {
     v3f64 rotation_default = { 0, 1, 0 };
 
@@ -786,7 +755,7 @@ static void AssembleDrawableRect(GameOffscreenBuffer *buffer, i64 x_offset, i64 
     SimpList<Tri_Color> tris = OrderVerts(morphed_polys, observer_normal, game_memory);
 
     // Draw.
-    Render(buffer, view_move_x, view_move_y, view_move_z, tris, observer_normal);
+    Render(buffer, game_state->view_move.x, game_state->view_move.y, game_state->view_move.z, tris, observer_normal);
 
     // Free all the memory we used up.
     // ZeroMemory(tris);
@@ -866,7 +835,7 @@ static int digit_number = 0;
 static bool paused;
 
 internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput> inputs, GameState* game_state, 
-        GameMemory* game_memory, PlatformServices services) 
+        GameMemory* game_memory, PlatformServices services, DevOpsStats* dev_state) 
 {
     for (int i = 0; i < angel_inputs.next_available_index; i += 1) {
         angel_inputs.inputs[i].stick_1 = inputs[i].stick_1;
@@ -902,7 +871,8 @@ internal void ProcessInputs(GameOffscreenBuffer *buffer, std::vector<AngelInput>
                 }
             } else if (IsKeyFirstUp(KEY_L, i)) {
                 if (paused == false) {
-                    LoadArea(dev_stage_id, game_state, game_memory, services, &rumble_patterns[0]);
+                    dev_state->current_area = LoadArea(dev_stage_id, game_state, game_memory, services, 
+                            &rumble_patterns[0]);
                 }
 
                 dev_stage_id = 0;
@@ -932,41 +902,18 @@ void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern, Plat
 static void CalculateNextFrame(GameState* game_state) 
 {
     if (game_state->current_path.current_time < game_state->current_path.length) {
-        view_move_x = Get(game_state->current_path.values, game_state->current_path.current_time)->x;
-        view_move_y = Get(game_state->current_path.values, game_state->current_path.current_time)->y;
-        view_move_z = Get(game_state->current_path.values, game_state->current_path.current_time)->z;
+        game_state->view_move.x = Get(game_state->current_path.values, game_state->current_path.current_time)->x;
+        game_state->view_move.y = Get(game_state->current_path.values, game_state->current_path.current_time)->y;
+        game_state->view_move.z = Get(game_state->current_path.values, game_state->current_path.current_time)->z;
 
         // note: unit of time is frames, not milliseconds.
         game_state->current_path.current_time += 1;
     }
 }
 
-static void InitGame(GameState* game_state, GameMemory* game_memory, PlatformServices services,  
-        std::vector<AngelInput> inputs, GameOffscreenBuffer* buffer) 
+static void Staging(GameState* game_state)
 {
-    // Generate some constant value lookup tables.
-    GenerateSqrtTable(buffer->width, buffer->height, buffer->width, game_memory); 
-
-    // Load from initial area. 
-    // note: we are just putting everything into this one Area for now.
-    current_area = LoadArea(0, game_state, game_memory, services, &rumble_patterns[0]);
-
-    auto_save_timer = 0;
-
-    SetDefaultInputs(inputs);
-    game_memory->initialized = true;
-}
-
-extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
-        GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame)
-{
-    GameMemory* game_memory = platform_memory;
-    if (game_memory->initialized == false) {
-        InitGame(game_state, game_memory, services, inputs, buffer);
-    }
-
-    ProcessInputs(buffer, inputs, game_state, game_memory, services);
-    
+    // refactor: some developer_state object should contain paused and be passed around as needed...
     if (paused == false) {
         // note: everything in here is what we want to be pausable.
 
@@ -975,13 +922,55 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
         //       time.
         //       We should group all of these changes over time so that we can apply some meaningful translations, etc,
         //       before rendering.
+        CalculateNextFrame(game_state);
     }
+}
 
-    CalculateNextFrame(game_state);
+static void GameUpdate(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
+        GameMemory* game_memory, PlatformServices services, f32 seconds_per_frame)
+{
+    ProcessInputs(buffer, inputs, game_state, game_memory, services, (DevOpsStats*)game_memory->transient_storage);
 
+    Staging(game_state);
+}
+
+static void InitState(GameState* game_state, GameMemory* game_memory, 
+        PlatformServices services, std::vector<AngelInput> inputs, GameOffscreenBuffer* buffer) 
+{
+    if (game_memory->initialized == false) {
+        DevOpsStats* dev_state = (DevOpsStats*)game_memory->transient_storage;
+
+        // Generate some constant value lookup tables.
+        GenerateSqrtTable(buffer->width, buffer->height, buffer->width, game_memory); 
+
+        // Load from initial area. 
+        // note: we are just putting everything into this one Area for now.
+        dev_state->current_area = LoadArea(0, game_state, game_memory, services, &rumble_patterns[0]);
+
+        auto_save_timer = 0;
+
+        SetDefaultInputs(inputs);
+        game_memory->initialized = true;
+    }
+}
+
+static void Render(GameOffscreenBuffer* buffer, GameMemory* game_memory, GameState* game_state, DevOpsStats* dev_state)
+{
     // study: casey remarks. how to make renderer faster!
     // study: Change render weird gradient, white/yellow patterns.
-    AssembleDrawableRect(buffer, view_move_x, view_move_y, view_move_z, current_area.friendlies, game_memory);
+    
+    AssembleDrawableRect(buffer, view_move_x, view_move_y, view_move_z, dev_state->current_area.friendlies,
+            game_memory, game_state);
+}
+
+extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
+        GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame)
+{
+    InitState(game_state, platform_memory, services, inputs, buffer);
+
+    GameUpdate(buffer, inputs, game_state, platform_memory, services, seconds_per_frame);
+
+    Render(buffer, platform_memory, game_state, (DevOpsStats*)platform_memory->transient_storage);
 }
 
 extern "C" void PauseAudio(char* name, PlatformServices services) 

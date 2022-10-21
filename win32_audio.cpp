@@ -1,7 +1,7 @@
 #ifndef AUDIO_CPP
 #define AUDIO_CPP
 
-#include <windows.h>
+// #include <windows.h>
 #include <spatialaudioclient.h>
 #include <audioclient.h>
 #include <mmeapi.h>

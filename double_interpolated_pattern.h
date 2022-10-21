@@ -1,7 +1,7 @@
 #ifndef DOUBLE_INTERPOLATED_PATTERN_H
 #define DOUBLE_INTERPOLATED_PATTERN_H
 
-// todo: value and value_2 must be lists.
+// study: should value and value_2 be lists?
 struct DoubleInterpolatedPattern
 {
     f32 value[60];    // where '60' is frames (aka time)

@@ -152,12 +152,13 @@ struct GameMemory
 {
     bool initialized;
     void* permanent_storage; // Memory which persists from frame to frame.
-    void* transient_storage; // note: not being used, unclear as to what this should be used for.
+    void* transient_storage; // note: just being occupied by DevOpStats
     u64 permanent_storage_size;
     u64 transient_storage_size;
     u64 permanent_storage_remaining;
     u64 transient_storage_remaining;
     u8* next_available;
+    u8* next_available_transient;
 };
 
 static void AdjustMemory(u64 size, u64 number, GameMemory* game_memory, void** to_allocate);

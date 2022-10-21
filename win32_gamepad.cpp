@@ -177,7 +177,7 @@ internal void GetDeviceInputs(std::vector<AngelInput>* result, bool* program_run
 void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern) 
 {
     XINPUT_VIBRATION vibration;
-    ZeroMemory(&vibration, sizeof(XINPUT_VIBRATION));
+    ZeroMemory(&vibration, 1, sizeof(XINPUT_VIBRATION));
 
     if (pattern->current_time >= pattern->length) {
         return;
@@ -191,4 +191,3 @@ void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern)
 
     XInputSetState(device_index, &vibration);
 }
-    
