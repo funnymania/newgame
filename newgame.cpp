@@ -911,9 +911,14 @@ static void CalculateNextFrame(GameState* game_state)
     }
 }
 
+// note: named for handling logic that includes whether something in memory should be drawn to the screen, oriented/
+//       positioned a certain way, or maybe even loaded fresh off the disk. 
+//       Depending on these qualities, something may also be removed from being rendered, and this would also be
+//       responsible for batched changes (such as unloading everything related to a cutscene that has just ended).
+//       may or may not cause cascade async signals to do things like write to disk or the network. 
+//       will likely be the workhorse of the game's state, and will go through many refactors.
 static void Staging(GameState* game_state)
 {
-    // refactor: some developer_state object should contain paused and be passed around as needed...
     if (paused == false) {
         // note: everything in here is what we want to be pausable.
 
@@ -926,9 +931,17 @@ static void Staging(GameState* game_state)
     }
 }
 
+// note: this is where we are going to handle everything that must be taken care of frame-over-frame.
+//       some caveats- Asynchronous processes we do not lock to timesteps (playing music, async loading). 
+//                     For these processes however we will still need to potentially be doing some evaluation on
+//                     a frame-by-frame basis. For instance, I may not want to just commit some action after a SFX
+//                     is finished playing, but instead wait to check something the game's timestep. In that case,
+//                     I would set some flag, or handle a function pointer or something more like an event, to be
+//                     handled somewhere in here.
 static void GameUpdate(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
         GameMemory* game_memory, PlatformServices services, f32 seconds_per_frame)
 {
+    // This is something that is going to need to happen every frame. 
     ProcessInputs(buffer, inputs, game_state, game_memory, services, (DevOpsStats*)game_memory->transient_storage);
 
     Staging(game_state);
@@ -958,11 +971,14 @@ static void Render(GameOffscreenBuffer* buffer, GameMemory* game_memory, GameSta
 {
     // study: casey remarks. how to make renderer faster!
     // study: Change render weird gradient, white/yellow patterns.
-    
     AssembleDrawableRect(buffer, view_move_x, view_move_y, view_move_z, dev_state->current_area.friendlies,
             game_memory, game_state);
 }
 
+// note: This is being called on the platform side some set number of times per second. We should be expecting
+//       everything we need from the underlying system to be provided through here, and hopefully only through here.
+// note: 'seconds_per_frame' is an unchanging value specified on the platform layer. Expect something like half the 
+//             monitor refresh rate, so on my machine that is 144FPS/2 = 72 FPS.
 extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
         GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame)
 {
@@ -970,6 +986,8 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
 
     GameUpdate(buffer, inputs, game_state, platform_memory, services, seconds_per_frame);
 
+    // note: while renderer is slow, we can actually work on staging, but the renderer is REALLY slow. 
+    //       probably this should be at least brought up to < 1 FPS without compiler optimizations.
     Render(buffer, platform_memory, game_state, (DevOpsStats*)platform_memory->transient_storage);
 }
 

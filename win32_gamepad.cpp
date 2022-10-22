@@ -27,6 +27,10 @@ internal void Win32LoadXInput(void)
     }
 }
 
+// study: if a user inputs something between one instance of Win32KeyDown being called, and also lets go of that input 
+//       before the next case of Win32KeyDown being called, the input will be lost. 
+//       if our framerate were somewhat low, this would pose a significant problem. 
+//       We need to look into something for Windows that is more event-driven.
 inline bool Win32KeyDown(int key)
 {
     return(((GetAsyncKeyState(key) & 0x8000) == 0x8000));
