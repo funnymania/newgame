@@ -1,3 +1,4 @@
+#include "primitives.h"
 #include "newgame.h"
 #include "sequence.h"
 

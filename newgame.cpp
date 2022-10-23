@@ -1,7 +1,3 @@
-#include <stdint.h>
-#include <vector>
-#include <math.h>
-
 #include "primitives.h"
 #include "memory.cpp"
 #include "list.cpp"
@@ -9,11 +5,14 @@
 #include "double_interpolated_pattern.cpp"
 #include "interpolated_pattern.cpp"
 #include "game_state.cpp"
-#include "geometry_m.h"
 #include "area.cpp"
 #include "devops_stats.h"
 #include "newgame.h"
 #include "platform_services.h"
+#include "polyhedron.h"
+
+#include <vector>
+#include <math.h>
 
 static u32 running_sounds_len = 0;
 

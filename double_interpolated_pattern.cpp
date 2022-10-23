@@ -1,3 +1,4 @@
+#include "sequence.h"
 #include "double_interpolated_pattern.h"
 
 DoubleInterpolatedPattern DoubleInterpolatedPattern::Create(Sequence_f32 sequence, Sequence_f32 sequence2) 

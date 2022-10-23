@@ -1,6 +1,6 @@
 #include "platform_services.h"
-#include <stdio.h>
-#include <string>
+#include "polyhedron.h"
+#include <string>               // this is for isspace.
 
 #define GRID_SIZE 32768
 

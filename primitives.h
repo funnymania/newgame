@@ -1,3 +1,8 @@
+#if !defined(PRIMITIVES_H)
+
+// note: uint8_t, etc.
+#include <stdint.h>
+
 // note: NEWGAME_INTERNAL 0 - Public release. 1 - Developers.
 //       NEWGAME_SLOW 0 - No slow code allowed. 1 - slow code welcome.
 #if NEWGAME_SLOW
@@ -18,6 +23,9 @@
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
 #define MAX_DEVICES 64
+
+// study: Should we derive this ourselves, or something different besides this constant without a type?
+#define PI 3.14159265358979323846
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -134,6 +142,12 @@ struct Transform
     // v3 scale;
 };
 
+enum MorphStatus 
+{
+    NO_MORPH,
+    SPHERE,
+};
+
 struct Obj 
 {
     Tri* triangles; // Vertice positions are OFFSETS from tra. A value of (1, 0, 0) is to the left of wherever tra is.
@@ -211,3 +225,5 @@ struct FileReadResult {
 void RenderModels(Obj* models, Camera camera);
 bool IsTriangleInCamera(Tri* triangle, Camera camera, Transform tra);
 
+#define PRIMITIVES_H
+#endif

@@ -1,3 +1,5 @@
+#include "primitives.h"
+#include "list.h"
 #include "interpolated_pattern.h"
 
 InterpolatedPattern InterpolatedPattern::Create(SimpList<v4i64> in_pattern, GameMemory* game_memory) 

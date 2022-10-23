@@ -1,4 +1,5 @@
 #include "list.h"
+#include "primitives.h"
 
 template <typename T>
 void AddToList(SimpList<T>* list, T new_t, GameMemory* memory) 
