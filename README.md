@@ -4,7 +4,22 @@ Seen below, movement via pre-defined path towards a gradient checkered plane (cp
 
 https://user-images.githubusercontent.com/36145527/199601381-fa134015-9556-4274-a536-8b9e0664d8f3.mp4
 
-You are on a path, that path is moving through the inside of a colored sphere, keyboard and controller input affects 
-rendering.
 
-The name 'for-khan' is arbitrary.
+## Features: 
+
+    Interoperability with Windows, might be some bugs.
+
+    Play WAV files asynchronously
+
+    Load OBJ files
+
+    Manual Memory Management
+
+    Live code editing via DLL reloading (changes in code are immediately reflected in game upon compilation)
+
+    keyboard input support
+
+    xinput integration
+
+    file reading in general
+
