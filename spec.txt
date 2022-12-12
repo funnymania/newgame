@@ -1,0 +1,110 @@
+platform_base
+    + typical drawing of base, (we'll have something for sound effects)
+    + notifications are activated via Activator, call into some action on the game side.
+
+inhabitat - the architecture for humans to not be human anymore.
+    + we have a grid, a space on the grid can be two different colors (let's say blue and green)
+    + the grid 
+    + swipe up to reveal some options 
+        + FindFreeSpace / FindFreeSpaceRange
+            + ( Size? ) : __any__
+        + DirtySpace (flip bit value)
+            +   
+     
+if anyone can edit anything, you can't have nice things.
+don't let them break up the rat pack. 
+
+
+
+
+
+
+
+OnCursor / Touch
+    if viewinggrid and interaction resolves to a space
+    get peerlist
+    DirtySpace(space, index of space)
+
+// efforts are concentrated here..
+    create dirty notification
+    Send dirty notification to all in peerlist
+//
+
+
+GameState must include a list of spaces.
+DirtySpace(space, index):
+    space[index] != space[index]
+
+
+CreateDirtyNotification:
+      
+
+SendNotificationToPeers:
+     
+    
+
+
+
+
+Notifications on Windows are XML driven
+Notification options include: 
+    launch attribute
+    visually:
+        
+        [ @ ] i.o
+        [some default image kinda cute, try gif/png transparent] [user_name] has moved in to space [id]
+        tagline goes here.
+
+        
+    AppAppLogoOverride - change the icon associated with the notification
+    Title
+
+if user_tagline == "", user_tagline = "tagline goes here."
+    
+<toast launch='conversationId=9813'>
+    <visual>
+        <binding template='ToastGeneric'>
+            <text> + user_name + " has moved in to space + space_id + </text>
+            <image src='ms-appx:///Images/AppLogo.png'/>
+            <text placement="attribution"> + user_tagline + </text>
+        </binding>
+    </visual>
+    <audio src='ms-appx:///Audio/NotificationSound.mp3'/>
+    <actions>
+        <action content='Go there.' arguments='action=go_to_space;space_id= + space_id +'/>
+        <action content='K/' arguments='action=clear'/>
+    </actions>
+</toast>
+
+- cpp/rt activator - for features in newgame
+
+- activation callback must be interfaced with such that OS asks game what to fill notification with...
+    - queue<NetworkEvent>, if event == notification, toast(notification)
+    - if app is in foreground or background, go to space. if in foreground, do not actually spin up a window, etc,
+        only move the user to the new space, and proceed to free up memory.
+
+0 - does everybody need to see the vote for the vote to occur? 
+    no but everybody does need to validate that the vote is valid hmm. Use signatures. 
+    a change is pushed by default
+        - but each change is resolved by each client.
+
+[
+- we need to listen for network events
+- we need to process a deque of NetworkEvents. (remember the odin idea here!)
+- if the event is a notification toast, we need to process that
+]
+
+- move trigger for notification to new_game
+
+- trigger from game to make toast
+
+- activation must be called from trigger in game
+
+
+The images you use in your toast notification can be sourced from...
+
+    http://
+    ms-appx:///
+    ms-appdata:///
+
+Image can be some default cuteness, or perhaps something lifted from device? google does this somehow.

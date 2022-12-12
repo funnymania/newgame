@@ -1,0 +1,17 @@
+SHIPPING
+
+platform should support:
+- If your app has a custom uninstaller, in your uninstaller you should call ToastNotificationManagerCompat.Uninstall();
+
+- explore packaging the app through MSIX for install/updating: https://learn.microsoft.com/en-us/windows/msix/overview
+    + note: this is required for custom desktop notification sounds. 
+
+- custom app icons (.ICOs or otherwise) should be functional
+- PlatformReadEntireFile will run into garbage when files are accessed by other programs while reading.
+- Replace Vector with List. std::vector<AngelInput> in Win32 code relies on an allocator which is different from that 
+     in the DLL for our game code. 
+- frame dips should not occur. on occasion they do!
+- we will need to create directories by platform when we need to commence porting to other platforms.  
+
+game should support:
+- Should be scaling down images written to Main Window's buffer on resizing the Window. Should also not be pausing the game during resize. Rendering, audio, all game code should not really be blocked ever by Window messages or the like.

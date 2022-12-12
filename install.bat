@@ -1,0 +1,2 @@
+create shortcut, install shortcut
+
