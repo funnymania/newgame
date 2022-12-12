@@ -1,6 +1,5 @@
-# Forkhan
+# inner_outer
 
-You are on a path, that path is moving through the inside of a colored sphere, keyboard and controller input affects 
-rendering.
+A grid of public spaces in a p2p network. Visit other ppl's spaces, express. 
 
-The name 'for-khan' is arbitrary.
+The name 'inner_outer' is a mystery.
