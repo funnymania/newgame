@@ -439,17 +439,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
             std::wstring cmdLineArgsStr(pCmdLine);
 
+            std::wstring user_tagline = L"When hosts come, ghosts go";
             // If launched from toast
             if (cmdLineArgsStr.find(TOAST_ACTIVATED_LAUNCH_ARG) != std::string::npos)
             {
                 // Let our NotificationActivator handle activation
                 hr = 4;
+                user_tagline = cmdLineArgsStr;
             }
 
             // Construct XML
             std::wstring user_name = L"LeifCote";
             std::wstring space_id = L"987997707";
-            std::wstring user_tagline = L"When hosts come, ghosts go";
             ComPtr<IXmlDocument> doc;
 
             std::wstring notification_content = 

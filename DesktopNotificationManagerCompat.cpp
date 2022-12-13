@@ -87,7 +87,6 @@ namespace DesktopNotificationManagerCompat
         // clsidStr = L"{" + clsidStr + L"}";
 
         // Register actiator with application ID.
-        // bug: DID NOT ACTIVATE
         ::RegSetKeyValueW(
             HKEY_CURRENT_USER,
             subKey.c_str(),
@@ -98,6 +97,39 @@ namespace DesktopNotificationManagerCompat
 
         // Register the COM server
         RETURN_IF_FAILED(RegisterComServer(clsidStr, exePath));
+
+        // Register custom URI for io://
+        subKey = L"io";
+        std::wstring custom_uri_value = L"";
+        ::RegSetKeyValueW(
+            HKEY_CLASSES_ROOT,
+            subKey.c_str(),
+            L"URL Protocol",
+            REG_SZ,
+            reinterpret_cast<const BYTE*>(custom_uri_value.c_str()),
+            static_cast<DWORD>((custom_uri_value.length() + 1) * sizeof(WCHAR)));
+
+        // Register executable for custom URI.
+        subKey = LR"(io\shell\open\command)";
+        std::wstring exe_string(exePath);
+
+#if NEWGAME_SLOW
+    // everything the same except pass devenv prefixed to string.
+    // note: you may need to change devenv location in registry, something in LOCAL_MACHINE + AppPaths
+    // see:  https://learn.microsoft.com/en-us/visualstudio/debugger/debug-multiple-processes?view=vs-2022#BKMK_Automatically_start_an_process_in_the_debugger
+    //
+    // find a running instance of visual with the correct exe
+    // pipe arguments into it (sharelink arguments, toast activation arguments, etc)
+    // exe_string.insert(0, L"devenv /debugexe ");
+#endif
+        exe_string += L" -ToastActivated %1";
+        ::RegSetKeyValueW(
+            HKEY_CLASSES_ROOT,
+            subKey.c_str(),
+            nullptr,
+            REG_SZ,
+            reinterpret_cast<const BYTE*>(exe_string.c_str()),
+            static_cast<DWORD>((exe_string.length() + 1) * sizeof(WCHAR)));
 
         s_registeredAumidAndComServer = true;
         return S_OK;

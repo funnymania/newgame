@@ -66,18 +66,7 @@ void SaveLevel()
 // note: Gamestate consists in staged things.
 void Stage(GameState* game_state, GameMemory* game_memory) 
 {
-    // path.
-    SimpList<v4i64> path = {};
-    AddToList<v4i64>(&path, POINT4_i64(0, 0, 0, 0), game_memory);
-    AddToList<v4i64>(&path, POINT4_i64(0, 0, 75, 75), game_memory);
-    AddToList<v4i64>(&path, POINT4_i64(0, 0, 75, 110), game_memory);
-    AddToList<v4i64>(&path, POINT4_i64(0, 0, 115, 150), game_memory);
-    AddToList<v4i64>(&path, POINT4_i64(0, 0, 265, 300), game_memory);
-    AddToList<v4i64>(&path, POINT4_i64(0, 0, 415, 450), game_memory);
 
-    game_state->current_path = InterpolatedPattern::Create(path, game_memory);
-
-    GameMemoryFree((u8*)path.array, 6, sizeof(v4i64)); 
 }
 
 struct char_size 

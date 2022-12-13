@@ -888,21 +888,6 @@ internal void ProcessInputsAndStage(GameOffscreenBuffer *buffer, std::vector<Ang
     if (paused == false) {
         // note: everything in here is what we want to be pausable.
 
-        // todo: There exist a list of patterns occurring at any one time. 
-        //       One example is game_state->current_path. Another will be every object undergoing some change over 
-        //       time.
-        //       We should group all of these changes over time so that we can apply some meaningful translations, etc,
-        //       before rendering.
-        
-        // previously CalculateNextFrame()
-        if (game_state->current_path.current_time < game_state->current_path.length) {
-            game_state->view_move.x = Get(game_state->current_path.values, game_state->current_path.current_time)->x;
-            game_state->view_move.y = Get(game_state->current_path.values, game_state->current_path.current_time)->y;
-            game_state->view_move.z = Get(game_state->current_path.values, game_state->current_path.current_time)->z;
-
-            // note: unit of time is frames, not milliseconds.
-            game_state->current_path.current_time += 1;
-        }
     }
 }
 
@@ -924,14 +909,7 @@ void RumbleController(u32 device_index, DoubleInterpolatedPattern* pattern, Plat
  
 static void CalculateNextFrame(GameState* game_state) 
 {
-    if (game_state->current_path.current_time < game_state->current_path.length) {
-        game_state->view_move.x = Get(game_state->current_path.values, game_state->current_path.current_time)->x;
-        game_state->view_move.y = Get(game_state->current_path.values, game_state->current_path.current_time)->y;
-        game_state->view_move.z = Get(game_state->current_path.values, game_state->current_path.current_time)->z;
 
-        // note: unit of time is frames, not milliseconds.
-        game_state->current_path.current_time += 1;
-    }
 }
 
 // note: named for handling logic that includes whether something in memory should be drawn to the screen, oriented/
@@ -978,6 +956,12 @@ static void InitState(GameState* game_state, GameMemory* game_memory,
 
         // Generate some constant value lookup tables.
         GenerateSqrtTable(buffer->width, buffer->height, buffer->width, game_memory); 
+
+        // Read peer_list from file.
+
+        // Send ping to all peers.
+
+        // Output online status of peers
 
         // Load from initial area. 
         // note: we are just putting everything into this one Area for now.
