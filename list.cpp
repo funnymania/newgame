@@ -54,3 +54,18 @@ SimpList<T> NewList(u64 length, GameMemory* game_memory)
 
     return(new_list);
 }
+
+template <typename T>
+void Free(SimpList<T>& list) 
+{
+    if (list.length == 0) return;
+
+    T* seek = list.array;
+    free(seek);
+    list.length -= 1;
+    while (list.length > 0) {
+        seek += 1;
+        free(seek);
+        list.length -= 1;
+    } 
+}

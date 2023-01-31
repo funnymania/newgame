@@ -65,6 +65,23 @@ struct Win32GameLib
     FILETIME last_write_time;
 };
 
+struct GameNotification {
+    u32 success;
+    u8 ip[4];
+    u32 port;
+    u64 space_id;
+};
+
+struct NetworkWorkerState {
+    SOCKET socket;
+    sockaddr_in socket_info;
+    u64* queue_in;
+    u64* queue_out;
+};
+
+extern "C" NetworkWorkerState activate_networking();
+extern "C" GameNotification pop_notification(NetworkWorkerState state);
+
 // note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
 typedef void game_update_loop(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, 
         GameState* game_state, GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame);
@@ -75,7 +92,15 @@ void GameUpdateLoopStub(GameOffscreenBuffer* buffer, std::vector<AngelInput> inp
         GameMemory* platform_memory, PlatformServices services, f32 seconds_per_frame) {}
 
 global_variable game_update_loop* GameUpdateAndRender = GameUpdateLoopStub;
-// #define GameUpdateAndRender GameUpdateAndRender_
+
+// note: this is a function TYPE. game_update_loop is now a TYPE of function that we can reference.
+// typedef void activate_networking();
+
+// note: basically a 'zero-initialized' function. We need to initialize our pointer below this line to SOMETHING. 
+//       This is that something.
+// void activate_networking_stub() {}
+
+// global_variable activate_networking* ActivateNetworking = activate_networking_stub;
 
 inline FILETIME Win32GetLastWrite(char* file_name) 
 {
@@ -101,6 +126,17 @@ u64 GetNullTerminatedMemoryLength(char* memory)
 
     return(length);
 }
+
+// internal HMODULE Win32LoadNetworking(char* file_name) 
+// {
+//     // Win32NetworkLib = {};
+//     HMODULE handle = LoadLibrary("nettle_dark.obj");
+//     if (handle) {
+//         ActivateNetworking = (activate_networking*)GetProcAddress(handle, "activate_networking");
+//     }
+// 
+//     return(handle);
+// }
 
 internal Win32GameLib Win32LoadGameDLL(char* file_name) 
 {
@@ -347,6 +383,125 @@ void CreateShortcut()
     }
 }
 
+static auto SeparateBy(char separator, std::wstring source) -> std::vector<std::wstring>
+{
+    std::vector<std::wstring> result;
+
+    // for each character, keep track of begin and end, when separator found add to result
+    int begin = 0;
+    for (int i = 0; i < source.size(); i += 1) {
+        if (source[i] == separator) {
+            result.push_back(source.substr(begin, i));
+            begin = i;
+        }
+    }
+
+    return result;
+}
+
+// note: if prefix not found returns result as is.
+static void ClipBeyondPrefix(std::wstring prefix, std::wstring& result) 
+{
+    // scan until prefix found, if found, return end_ptr to prefix.end()
+    int begin = 0;
+    size_t end = prefix.size();
+    while (end != result.size()) {
+        if (result.substr(begin, end) == prefix) {
+            result = result.substr(end, result.size());
+            return;
+        }
+
+        begin += 1; end += 1;
+    }
+}
+
+struct URICommand
+{
+    std::wstring name;
+    std::wstring value;
+};
+
+static void ParseOutCommands(std::wstring share_link, std::vector<URICommand>& result)
+{
+    bool checking_value = false;
+    u32 i = 0;
+    u32 end = 0;
+
+    URICommand command { L"", L"" };
+    while (end != share_link.size()) {
+        if (checking_value == false) {
+            if (end == ':') {
+                command.name = share_link.substr(i, end);
+                i = end + 1;
+                end = end + 1;
+                checking_value = true;
+            } else {
+                end += 1;
+            }
+        } 
+        else {
+            if (share_link[end] == ' ' || share_link[end] == '\0') {
+                command.value = share_link.substr(i, end);
+                i = end + 1;
+                end = end + 1;
+                checking_value = false;
+
+                result.push_back(command);
+            } else {
+                end += 1;
+            }
+        }
+    }
+}
+
+void GenerateMarkedToast(std::wstring user_name, u64 space_id, std::wstring user_tagline)
+{
+    // Construct XML
+    ComPtr<IXmlDocument> doc;
+
+    std::wstring space_ = std::to_wstring(space_id);
+
+    std::wstring notification_content = 
+        LR"(
+            <toast>
+                <visual>
+                    <binding template='ToastGeneric'>
+                        <text>)" + user_name + L" has moved in to space " + space_ + LR"(</text>
+                            <text placement="attribution">)" + user_tagline + LR"(</text>
+                                <image src="V:\inner_output\data\SweetHeart_(Neutral).gif"/>
+                    </binding>
+                </visual>
+                <actions>
+                    <action content='Go there.' arguments='action=go_to_space;space_id=)" + space_ + LR"('/>
+                    <action content='K/' arguments='action=reply'/>
+                        </actions>
+            </toast>
+        )";
+
+    HRESULT hr;
+    hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(notification_content.data(), &doc);
+    if (SUCCEEDED(hr))
+    {
+        // See full code sample to learn how to inject dynamic text, buttons, and more
+
+        // Create the notifier
+        // Desktop apps must use the compat method to create the notifier.
+        ComPtr<IToastNotifier> notifier;
+        hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
+        if (SUCCEEDED(hr))
+        {
+            // Create the notification itself (using helper method from compat library)
+            ComPtr<IToastNotification> toast;
+            hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
+            if (SUCCEEDED(hr))
+            {
+                // And show it!
+                hr = notifier->Show(toast.Get());
+            }
+        }
+    }
+}
+
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine, int nCmdShow) 
 {
     // windows has architected the notification system to depend upon static reference to HINSTANCE.
@@ -425,6 +580,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
         if (window) {
             HRESULT hr;
 
+            NetworkWorkerState network_handle = activate_networking();
+
             // setup shortcut for .exe, if it does not already exist.
             if (IsUserAnAdmin() == 1) {
                 CreateShortcut();
@@ -434,63 +591,84 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
             hr = DesktopNotificationManagerCompat::RegisterAumidAndComServer(L"wə?.i.o", 
                     __uuidof(NotificationActivator));
 
+            std::wstring shortlink_alias = L"io";
+
             // Register activator type
             hr = DesktopNotificationManagerCompat::RegisterActivator();
 
             std::wstring cmdLineArgsStr(pCmdLine);
 
-            std::wstring user_tagline = L"When hosts come, ghosts go";
+            std::vector<URICommand> uri_commands;
+
+            // Load in peers.
+            SimpList<Peer> followers { nullptr, 0 };
+            // SimpList<Peer> following;
+
             // If launched from toast
             if (cmdLineArgsStr.find(TOAST_ACTIVATED_LAUNCH_ARG) != std::string::npos)
             {
                 // Let our NotificationActivator handle activation
-                hr = 4;
-                user_tagline = cmdLineArgsStr;
+
+                // parse out [-Toast][ ][io][://][command][-][argument]
+                // user_tagline = cmdLineArgsStr;
+
+                // separate by space
+                std::wstring share_link = SeparateBy(' ', cmdLineArgsStr)[1];
+                
+                // second is the share link, separate 'io' (shortlink_alias), [://], and then the
+                //      rest is a list of command-argument separated by space
+                ClipBeyondPrefix(shortlink_alias + LR"(://)", share_link);
+
+                ParseOutCommands(share_link, uri_commands);
             }
 
             // Construct XML
             std::wstring user_name = L"LeifCote";
-            std::wstring space_id = L"987997707";
-            ComPtr<IXmlDocument> doc;
+            u64 space_id = 987997707;
+            std::wstring user_tagline = L"When hosts come, ghosts go";
 
-            std::wstring notification_content = 
-                LR"(
-                <toast>
-                    <visual>
-                        <binding template='ToastGeneric'>
-                            <text>)" + user_name + L" has moved in to space " + space_id + LR"(</text>
-                            <text placement="attribution">)" + user_tagline + LR"(</text>
-                            <image src="V:\inner_output\data\SweetHeart_(Neutral).gif"/>
-                        </binding>
-                    </visual>
-                    <actions>
-                        <action content='Go there.' arguments='action=go_to_space;space_id=)" + space_id + LR"('/>
-                        <action content='K/' arguments='action=reply'/>
-                    </actions>
-                </toast>
-                )";
+            GenerateMarkedToast(user_name, space_id, user_tagline);
 
-            hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(notification_content.data(), &doc);
-            if (SUCCEEDED(hr))
-            {
-                // See full code sample to learn how to inject dynamic text, buttons, and more
+            // ComPtr<IXmlDocument> doc;
 
-                // Create the notifier
-                // Desktop apps must use the compat method to create the notifier.
-                ComPtr<IToastNotifier> notifier;
-                hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
-                if (SUCCEEDED(hr))
-                {
-                    // Create the notification itself (using helper method from compat library)
-                    ComPtr<IToastNotification> toast;
-                    hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
-                    if (SUCCEEDED(hr))
-                    {
-                        // And show it!
-                        hr = notifier->Show(toast.Get());
-                    }
-                }
-            }
+            // std::wstring notification_content = 
+            //     LR"(
+            //     <toast>
+            //         <visual>
+            //             <binding template='ToastGeneric'>
+            //                 <text>)" + user_name + L" has moved in to space " + space_id + LR"(</text>
+            //                 <text placement="attribution">)" + user_tagline + LR"(</text>
+            //                 <image src="V:\inner_output\data\SweetHeart_(Neutral).gif"/>
+            //             </binding>
+            //         </visual>
+            //         <actions>
+            //             <action content='Go there.' arguments='action=go_to_space;space_id=)" + space_id + LR"('/>
+            //             <action content='K/' arguments='action=reply'/>
+            //         </actions>
+            //     </toast>
+            //     )";
+
+            // hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(notification_content.data(), &doc);
+            // if (SUCCEEDED(hr))
+            // {
+            //     // See full code sample to learn how to inject dynamic text, buttons, and more
+
+            //     // Create the notifier
+            //     // Desktop apps must use the compat method to create the notifier.
+            //     ComPtr<IToastNotifier> notifier;
+            //     hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
+            //     if (SUCCEEDED(hr))
+            //     {
+            //         // Create the notification itself (using helper method from compat library)
+            //         ComPtr<IToastNotification> toast;
+            //         hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
+            //         if (SUCCEEDED(hr))
+            //         {
+            //             // And show it!
+            //             hr = notifier->Show(toast.Get());
+            //         }
+            //     }
+            // }
 
             HDC refresh_DC = GetDC(window);
 
@@ -651,6 +829,27 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR pCmdLine,
 
                 // Get device inputs.
                 GetDeviceInputs(&inputs, &program_running);
+
+                // Poll notification_queue.
+                GameNotification notification = pop_notification(network_handle);
+                if (notification.success != 0) {
+                    Peer new_peer = { 
+                        {},
+                        4060, 
+                        L"cinnamonbun", 
+                        L"cinnamonbun", 
+                        L"i'm a turtle", 
+                        true 
+                    };
+
+                    memcpy(new_peer.ip, notification.ip, sizeof(notification.ip));
+
+                    AddToList<Peer>(&followers, new_peer, &game_memory);
+                    PeerLookupResult marker = LookUpFollowedBy(followers, notification.ip, notification.port);
+                    if (marker.success == true) {
+                        GenerateMarkedToast(marker.peer.name, notification.space_id, marker.peer.tagline);
+                    }
+                }
 
                 GameOffscreenBuffer screen_buffer = {};
                 screen_buffer.memory = win32_buffer.memory;

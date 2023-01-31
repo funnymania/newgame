@@ -25,6 +25,12 @@ static AngelInputArray angel_inputs = {};
 // Object for dual-motor rumbling.
 static DoubleInterpolatedPattern rumble_patterns[MAX_DEVICES] = {};
 
+struct URICommand
+{
+    std::wstring name;
+    std::wstring value;
+};
+
 static i64 view_move_x = 0;
 static i64 view_move_y = 0;
 static i64 view_move_z = 0;
@@ -188,6 +194,7 @@ static SimpList<Polyhedron> MorphPolyhedra(SimpList<Polyhedron> polyhedra, GameM
     result_polys.length += polyhedra.length;
     for (i32 a = 0; a < polyhedra.length; a += 1) {
         result_polys.array[a].color = polyhedra.array[a].color;
+        result_polys.array[a].transform = polyhedra.array[a].transform;
 
         AdjustMemory(sizeof(v3f64), polyhedra.array[a].vertices.length,
                 game_memory, (void**)&(result_polys.array[a].vertices.array));
@@ -512,6 +519,11 @@ bool intersect_triangle(Line line, TriangleRefVertices triangle, f64 scale)
         MultiplyVector(scale, *triangle.verts[1]),
         MultiplyVector(scale, *triangle.verts[2]),
     };
+    // Tri tri = { 
+    //     *triangle.verts[0],
+    //     *triangle.verts[1],
+    //     *triangle.verts[2],
+    // };
 
     v3f64 E1 = { 
         tri.verts[1].x - tri.verts[0].x,
@@ -533,17 +545,17 @@ bool intersect_triangle(Line line, TriangleRefVertices triangle, f64 scale)
         line.y.z - line.x.z
     };
 
-    f64 line_x_squared = line_to_zero.x * line_to_zero.x;
-    f64 line_y_squared = line_to_zero.y * line_to_zero.y;
-    f64 line_z_squared = line_to_zero.z * line_to_zero.z;
+    // f64 line_x_squared = line_to_zero.x * line_to_zero.x;
+    // f64 line_y_squared = line_to_zero.y * line_to_zero.y;
+    // f64 line_z_squared = line_to_zero.z * line_to_zero.z;
 
-    f32 inverted_line_distance = Q_rsqrt((f32)(line_x_squared + line_y_squared + line_z_squared));
+    // f32 inverted_line_distance = Q_rsqrt((f32)(line_x_squared + line_y_squared + line_z_squared));
 
     // perf: can precompute this assuming the per chosen clip_range (only once if the clip_range does not change)
     v3f64 line_direction = {
-        line_to_zero.x * inverted_line_distance,
-        line_to_zero.y * inverted_line_distance,
-        line_to_zero.z * inverted_line_distance,
+        0,
+        0,
+        1,
     };
 
     f64 det = DotProduct(line_direction, N) * -1;
@@ -577,6 +589,7 @@ static Color TriangleContainingPixel(SimpList<Tri_Color> tris, i32 pixel_x, i32 
 
     for (i32 a = 0; a < tris.length; a += 1) {
         // does the line intersect with the triangle
+        tris.array[a].color = { u8(a * 12), u8(a * 12), u8(a * 12), 255 };
         if (intersect_triangle(line, tris.array[a].triangle, scale)) {
              return(tris.array[a].color);
         }
@@ -600,7 +613,7 @@ static Color TriangleContainingPixel(SimpList<Tri_Color> tris, i32 pixel_x, i32 
 //       so you DO have to go through every pixel. you know which color was 
 // perf: for polyhedra can just save the rotation values it has so that we don't have to rotate it every frame.
 // study: how to "look" at something.
-static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset, SimpList<Tri_Color> tris, 
+static void DrawToScreen(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 z_offset, SimpList<Tri_Color> tris, 
         v3f64 observer_normal) 
 {
     i32 zoom = (i32)(z_offset / GRID_SIZE + 256);
@@ -608,7 +621,7 @@ static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 
 
     // zoom_apply = 1;
 
-    f64 scale = 256;
+    f64 scale = 128;
 
     // todo: Triangles must own a list of pixel_rows.
     // struct PixelRow { u64 begin; u64 end; };
@@ -634,6 +647,7 @@ static void Render(GameOffscreenBuffer *buffer, i64 x_offset, i64 y_offset, i64 
         for (i32 x = 0; x < buffer->width; x += 1) {
             i32 color = 0;
             Color pixel_result = TriangleContainingPixel(tris, x, y, { 255, 0, 255, 255 }, scale);
+            // Color pixel_result = { 40, 40, 40 };
 
             color = (u8)((pixel_result.a + (x_offset / GRID_SIZE)) * zoom_apply);
             color = color << 8;
@@ -747,6 +761,17 @@ static void AssembleDrawableRect(GameOffscreenBuffer *buffer, i64 x_offset, i64 
     //       let's also simply stop the ordering of verts and assume we don't care about this for Render().
     RotatePolyhedra(morphed_polys, world_rotation_now, rotation_default);
 
+    // Move Polyhedra according to their positioning.
+    morphed_polys.array[0].transform.pos.x -= 0;
+    morphed_polys.array[0].transform.pos.y += 2;
+    for (int Poly = 0; Poly < morphed_polys.length; Poly += 1) {
+        for (int Vert = 0; Vert < morphed_polys.array[Poly].vertices.length; Vert += 1) {
+            morphed_polys.array[Poly].vertices.array[Vert].x += morphed_polys.array[Poly].transform.pos.x;
+            morphed_polys.array[Poly].vertices.array[Vert].y += morphed_polys.array[Poly].transform.pos.y;
+            morphed_polys.array[Poly].vertices.array[Vert].z += morphed_polys.array[Poly].transform.pos.z;
+        }
+    }
+
     // research: needs more! Assemble into some draw order.
     //           problems to solve: overlapping triangles. we need to be able to break down some triangle in 
     //           such a way that given some oberver_normal, we can use the line which overlaps some triangle
@@ -756,7 +781,7 @@ static void AssembleDrawableRect(GameOffscreenBuffer *buffer, i64 x_offset, i64 
     SimpList<Tri_Color> tris = OrderVerts(morphed_polys, observer_normal, game_memory);
 
     // Draw.
-    Render(buffer, game_state->view_move.x, game_state->view_move.y, game_state->view_move.z, tris, observer_normal);
+    DrawToScreen(buffer, game_state->view_move.x, game_state->view_move.y, game_state->view_move.z, tris, observer_normal);
 
     // Free all the memory we used up.
     // ZeroMemory(tris);
@@ -932,6 +957,36 @@ static void Staging(GameState* game_state)
     }
 }
 
+static SimpList<Peer> peers;
+
+// user is now receiving all updates from peer.
+static void AddToPeerlist(std::wstring peer, GameMemory *game_memory)
+{
+    Peer new_peer { 
+        {0, 0, 0, 0}, 
+        5040, 
+        *peer.c_str(), 
+        *peer.c_str(), 
+        L"a tagline is here", 
+        false 
+    };
+
+    AddToList<Peer>(&peers, new_peer, game_memory);
+}
+
+//    u8 ip[4];
+//    u32 port;
+//    wchar_t name[36];
+//    wchar_t name_as_key[40];
+//    wchar_t tagline[100];
+//    bool online;
+static void ProcessNetworkRequest(URICommand command, GameMemory *game_memory) 
+{
+    if (command.name == L"add") {
+        AddToPeerlist(command.value, game_memory);
+    }
+}
+
 // note: this is where we are going to handle everything that must be taken care of frame-over-frame.
 //       some caveats- Asynchronous processes we do not lock to timesteps (playing music, async loading). 
 //                     For these processes however we will still need to potentially be doing some evaluation on
@@ -940,10 +995,10 @@ static void Staging(GameState* game_state)
 //                     I would set some flag, or handle a function pointer or something more like an event, to be
 //                     handled somewhere in here.
 static void GameUpdate(GameOffscreenBuffer* buffer, std::vector<AngelInput> inputs, GameState* game_state,
-        GameMemory* game_memory, PlatformServices services, f32 seconds_per_frame)
+        GameMemory* game_memory, PlatformServices services, f32 seconds_per_frame, URICommand command)
 {
     // note: this is something that is going to need to happen before any changes based on user inputs occurs.
-    
+    ProcessNetworkRequest(command, game_memory); 
     ProcessInputsAndStage(buffer, inputs, game_state, game_memory, services, 
             (DevOpsStats*)game_memory->transient_storage);
 }
@@ -991,11 +1046,17 @@ extern "C" void GameUpdateAndRender(GameOffscreenBuffer* buffer, std::vector<Ang
 {
     InitState(game_state, platform_memory, services, inputs, buffer);
 
-    GameUpdate(buffer, inputs, game_state, platform_memory, services, seconds_per_frame);
+    GameUpdate(buffer, inputs, game_state, platform_memory, services, seconds_per_frame, {});
 
     // note: while renderer is slow, we can actually work on staging, but the renderer is REALLY slow. 
     //       probably this should be at least brought up to < 1 FPS without compiler optimizations.
     Render(buffer, platform_memory, game_state, (DevOpsStats*)platform_memory->transient_storage);
+}
+
+// Add multiple network requests to request queue.
+extern "C" void AddNetworkRequests(SimpList<URICommand> commands) 
+{
+    Free<URICommand>(commands);
 }
 
 extern "C" void PauseAudio(char* name, PlatformServices services) 

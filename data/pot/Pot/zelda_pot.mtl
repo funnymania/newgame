@@ -1,0 +1,32 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 05.05.2020 18:06:00
+# No pots were harmed in the ripping process.
+
+newmtl pot_base
+	Ns 0.2500
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.2734 0.2344 0.1953
+	Kd 0.2734 0.2344 0.1953
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka pot_side.png
+	map_Kd pot_side.png
+
+newmtl pot_top
+	Ns 0.2500
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.9961 0.9961 0.9961
+	Kd 0.9961 0.9961 0.9961
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka pot_top.png
+	map_Kd pot_top.png
+	map_d pot_top.png

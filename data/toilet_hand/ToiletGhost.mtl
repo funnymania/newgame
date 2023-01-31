@@ -1,0 +1,20 @@
+# Material file for ToiletGhost.obj
+
+newmtl mtl_06001AB0
+	Ns 96
+	d 1
+	illum 2
+	Kd 0.64 0.64 0.64
+	Ks 0.5 0.5 0.5
+	Ka 0.0 0.0 0.0
+	map_Kd 06001AB0.png
+
+newmtl mtl_060022B0
+	Ns 96
+	d 1
+	illum 2
+	Kd 0.64 0.64 0.64
+	Ks 0.5 0.5 0.5
+	Ka 0.0 0.0 0.0
+	map_Kd 060022B0.png
+

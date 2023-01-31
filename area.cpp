@@ -361,24 +361,30 @@ static Area LoadArea(int id, GameState* game_state, GameMemory* game_memory, Pla
     Area result = {};
 
     // Load models into memory.
-    // study: how to load and store levels to and from memory.
     FileReadResult file_result = {};
     Polyhedron cube = {};
-
     services.read_file("cube.obj", &file_result);
-
-    // services.read_file("building1.obj", &file_result);
-    // services.read_file("building2.obj", &file_result);
-    // services.read_file("building3.obj", &file_result);
-    // services.read_file("elevator.obj", &file_result);
-    // services.read_file("elevator.obj", &file_result);
-
     if (file_result.data) {
         cube = LoadOBJToMemory(file_result, game_memory, services);
     }
 
     // move the cube.
-    cube.transform.pos = { 0, 0, 2 };
+    cube.transform.pos = { 4, 0, 0 };
+    AddToList<Polyhedron>(&(result.friendlies), cube, game_memory);
+
+    // blah
+    file_result = {};
+    cube = {};
+    services.read_file("bahamut/bahamut.obj", &file_result);
+    if (file_result.data) {
+        cube = LoadOBJToMemory(file_result, game_memory, services);
+    }
+
+    // move the cube.
+    cube.transform.pos = { 2, 2, 0 };
+    AddToList<Polyhedron>(&(result.friendlies), cube, game_memory);
+
+    Stage(game_state, game_memory);
 
     // example of how to set rumble.
     // note: services.rumble_controller is expected to be called each frame.
@@ -387,10 +393,6 @@ static Area LoadArea(int id, GameState* game_state, GameMemory* game_memory, Pla
     // Sequence_f32 second = Sequence_f32::Create(first_arr, 3, game_memory);
     // rumbles[0] = DoubleInterpolatedPattern::Create(first, second);
     // services.rumble_controller(0, rumbles);
-
-    AddToList<Polyhedron>(&(result.friendlies), cube, game_memory);
-
-    Stage(game_state, game_memory);
 
     return(result);
 }
